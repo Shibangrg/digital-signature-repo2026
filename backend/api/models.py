@@ -114,14 +114,11 @@ class DocumentRecord(models.Model):
 
 
     def save(self, *args, **kwargs):
-        # Create a version before saving changes
-        if self.pk:
-            previous_version = DocumentRecord.objects.get(pk=self.pk)
-            DocumentVersion.objects.create(
-                document=previous_version,
-                content=previous_version.content,
-                version_number=DocumentVersion.objects.filter(document=previous_version).count() + 1
-            )
+        # Document versions are created explicitly in backend/api/views.py
+        # via _upsert_document_chain() to keep hash-chain fields consistent.
+        # This model-level save hook is intentionally a no-op.
+        super().save(*args, **kwargs)
+
 
 
 class DocumentVersion(models.Model):
