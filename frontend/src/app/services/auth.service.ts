@@ -14,6 +14,14 @@ export interface AuthResponse {
   org_name?: string;
 }
 
+export interface User {
+  username: string;
+  role: 'system_admin' | 'org_admin' | 'user';
+  org_name?: string;
+  join_code?: string;
+  is_pending_approval: boolean;
+}
+
 export interface PendingMember {
   user_id: number;
   username: string;
@@ -24,11 +32,12 @@ export interface PendingMember {
   providedIn: 'root',
 })
 export class AuthService {
-private apiUrl = environment.apiBaseUrl;  
+  private apiUrl = environment.apiBaseUrl;
   currentUser = signal<AuthResponse | null>(this.loadUserFromStorage());
-
+  signatureAlgorithm = signal<'RSA-SHA256' | 'ECDSA-P256-SHA256'>((this.currentUser()?.signature_algorithm as any) ?? 'RSA-SHA256');
   constructor(private http: HttpClient, private router: Router) {}
 
+  // --- SESSION MANAGEMENT ---
   private loadUserFromStorage(): AuthResponse | null {
     const data = localStorage.getItem('auth_user');
     return data ? JSON.parse(data) : null;
@@ -40,27 +49,37 @@ private apiUrl = environment.apiBaseUrl;
     this.currentUser.set(res);
   }
 
-  // --- STANDARD AUTH ---
+  private clearSession(): void {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    this.currentUser.set(null);
+    this.router.navigate(['/login']);
+  }
+
+  // --- AUTHENTICATION ---
   login(payload: any): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.apiUrl}/login`, payload).pipe(
       tap((res) => this.saveSession(res))
     );
   }
 
+  // --- REGISTRATION FLOWS ---
+  // Standard user: Optionally takes a join_code for B2B onboarding
   register(payload: any): Observable<AuthResponse> {
-    // Payload may include optional 'join_code'
-    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, payload).pipe(
-      tap((res) => this.saveSession(res))
-    );
-  }
+  // Pass the entire object to the backend
+  return this.http.post<AuthResponse>(`${this.apiUrl}/register`, payload).pipe(
+    tap((res) => this.saveSession(res))
+  );
+}
 
-  // --- B2B ORGANIZATION AUTH ---
-  registerOrg(payload: any): Observable<AuthResponse> {
-    return this.http.post<AuthResponse>(`${this.apiUrl}/register-org`, payload).pipe(
-      tap((res) => this.saveSession(res))
-    );
-  }
+// Org Admin registration
+registerOrg(payload: any): Observable<AuthResponse> {
+  return this.http.post<AuthResponse>(`${this.apiUrl}/register-org`, payload).pipe(
+    tap((res) => this.saveSession(res))
+  );
+}
 
+  // --- ADMIN APPROVAL (B2B) ---
   getPendingMembers(): Observable<PendingMember[]> {
     return this.http.get<PendingMember[]>(`${this.apiUrl}/org/pending-members`);
   }
@@ -76,11 +95,13 @@ private apiUrl = environment.apiBaseUrl;
       error: () => this.clearSession(),
     });
   }
+  token(): string | null {
+    return localStorage.getItem('auth_token');
+  }
 
-  private clearSession(): void {
+  clearLocal(): void {
     localStorage.removeItem('auth_token');
     localStorage.removeItem('auth_user');
     this.currentUser.set(null);
-    this.router.navigate(['/login']);
   }
 }

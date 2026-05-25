@@ -30,6 +30,9 @@ export class NavbarComponent {
   toggleProfileMenu(): void {
     this.profileMenuOpen.set(!this.profileMenuOpen());
   }
+  logout(): void {
+  this.auth.logout();
+}
 
   closeProfileMenu(): void {
     this.profileMenuOpen.set(false);

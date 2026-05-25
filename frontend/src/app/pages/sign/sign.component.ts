@@ -1,11 +1,14 @@
 import { CommonModule } from '@angular/common';
-import { Component, inject, OnInit, signal } from '@angular/core';
+import { Component, ElementRef, inject, OnInit, signal, ViewChild } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { NavbarComponent } from '../../components/navbar/navbar.component';
 import { AuthService } from '../../services/auth.service';
 import { SignatureApiService } from '../../services/signature-api.service';
-
+export interface SupportedAlgorithm {
+  id: string;
+  label: string;
+}
 @Component({
   selector: 'app-sign',
   standalone: true,
@@ -13,10 +16,25 @@ import { SignatureApiService } from '../../services/signature-api.service';
   templateUrl: './sign.component.html',
   styleUrl: './sign.component.css',
 })
+
 export class SignComponent implements OnInit {
   // MUST BE PUBLIC to use in the HTML template
   public auth = inject(AuthService);
   private api = inject(SignatureApiService);
+  // ADD THIS for the missing file input reference
+  @ViewChild('fileInput') signFileInputRef!: ElementRef<HTMLInputElement>;
+  inputType = signal<'text' | 'file'>('text');
+signLoading = signal(false);
+signError = signal<string | null>(null);
+
+setInputType(type: 'text' | 'file'): void {
+  this.inputType.set(type);
+}
+
+  // IMPLEMENT THIS to satisfy OnInit
+  ngOnInit(): void {
+    // Initialization logic if needed
+  }
   
   // ... Keep the exact rest of your existing logic in this file unchanged ...
 
@@ -58,6 +76,7 @@ export class SignComponent implements OnInit {
     // Open algorithm picker first
     this.openAlgorithmModal();
   }
+  
 
   private openAlgorithmModal(): void {
     this.error.set(null);
@@ -65,8 +84,15 @@ export class SignComponent implements OnInit {
     this.signedPackageBlob.set(null);
     this.revokeUrl();
 
-    // Default selection to current session algo
-    this.selectedAlgorithm.set(this.auth.signatureAlgorithm());
+  // TYPE-CAST THE VALUE HERE
+    const currentAlgo = this.auth.signatureAlgorithm() as 'RSA-SHA256' | 'ECDSA-P256-SHA256';
+    
+    // Default to 'RSA-SHA256' if the value is something else or undefined
+    const validAlgo = (currentAlgo === 'ECDSA-P256-SHA256') ? 'ECDSA-P256-SHA256' : 'RSA-SHA256';
+    
+    this.selectedAlgorithm.set(validAlgo);
+
+    this.algorithmModalOpen.set(true);
 
     this.algorithmModalOpen.set(true);
     if (this.supportedAlgorithms().length === 0) {
@@ -220,4 +246,5 @@ export class SignComponent implements OnInit {
     this.signedPackageBlob.set(null);
     this.revokeUrl();
   }
+  
 }
