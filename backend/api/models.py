@@ -1,11 +1,25 @@
+import string
+import random
 from django.conf import settings
 from django.db import models
 from django.utils import timezone
 
+def generate_join_code():
+    """Generates an 8-character random uppercase alphanumeric string."""
+    return ''.join(random.choices(string.ascii_uppercase + string.digits, k=8))
+
+class Organization(models.Model):
+    name = models.CharField(max_length=255)
+    join_code = models.CharField(max_length=8, unique=True, default=generate_join_code)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return self.name
 
 class UserProfile(models.Model):
     class Role(models.TextChoices):
-        ADMIN = "admin", "Admin"
+        SYSTEM_ADMIN = "system_admin", "System Admin"
+        ORG_ADMIN = "org_admin", "Organization Admin"
         USER = "user", "User"
 
     class SignatureAlgorithm(models.TextChoices):
@@ -30,6 +44,16 @@ class UserProfile(models.Model):
         default=SignatureAlgorithm.RSA,
     )
     role = models.CharField(max_length=16, choices=Role.choices, default=Role.USER)
+    
+    # --- B2B Multi-Tenant Fields ---
+    organization = models.ForeignKey(
+        Organization, 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        blank=True, 
+        related_name="members"
+    )
+    is_org_approved = models.BooleanField(default=False)
 
     class Meta:
         verbose_name = "User profile"

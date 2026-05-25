@@ -1,11 +1,18 @@
 from django.urls import path
-
 from . import views
 
 urlpatterns = [
+    # Auth & Admin routes
     path("register", views.register, name="register"),
     path("login", views.login_view, name="login"),
     path("logout", views.logout_view, name="logout"),
+    
+    # --- New B2B Endpoints ---
+    path("register-org", views.register_org, name="register_org"),
+    path("org/pending-members", views.get_pending_members, name="get_pending_members"),
+    path("org/manage-member", views.manage_member, name="manage_member"),
+    
+    # Existing routes
     path("my-public-key", views.my_public_key, name="my_public_key"),
     path("set-signature-algorithm", views.set_signature_algorithm, name="set_signature_algorithm"),
     path("supported-algorithms", views.supported_algorithms, name="supported_algorithms"),
@@ -18,7 +25,8 @@ urlpatterns = [
     path("logs", views.logs, name="logs"),
     path("verify", views.verify, name="verify"),
     path("export", views.export_signed, name="export"),
-    # New signed-package endpoints
+    
+    # Signed-package endpoints
     path("sign-document", views.sign_document, name="sign_document"),
     path("verify-document", views.verify_document, name="verify_document"),
     path("verify-stored-document", views.verify_stored_document, name="verify_stored_document"),

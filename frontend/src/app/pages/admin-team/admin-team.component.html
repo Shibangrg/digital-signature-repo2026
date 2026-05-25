@@ -1,0 +1,44 @@
+<app-navbar />
+
+<main class="page-container">
+  <div class="page-header">
+    <h1 id="page-title">Team Management</h1>
+    <p class="page-subtitle">Approve or deny requests to join your organization.</p>
+  </div>
+
+  <section class="card">
+    <div *ngIf="message()" class="banner" [class.banner-success]="message()?.type === 'success'" [class.banner-error]="message()?.type === 'error'" style="margin-bottom: 1.5rem;">
+      <span>{{ message()?.text }}</span>
+    </div>
+
+    <div *ngIf="loading()" style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+      Loading requests...
+    </div>
+
+    <div *ngIf="!loading() && pendingMembers().length === 0" style="color: var(--text-secondary); text-align: center; padding: 2rem;">
+      There are currently no pending requests to join your organization.
+    </div>
+
+    <div class="table-responsive" *ngIf="!loading() && pendingMembers().length > 0">
+      <table style="width: 100%; border-collapse: collapse; text-align: left; color: var(--text-primary);">
+        <thead>
+          <tr style="border-bottom: 1px solid var(--border-color);">
+            <th style="padding: 1rem; font-weight: 600; color: var(--text-secondary);">Username</th>
+            <th style="padding: 1rem; font-weight: 600; color: var(--text-secondary);">Request Date</th>
+            <th style="padding: 1rem; font-weight: 600; color: var(--text-secondary); text-align: right;">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr *ngFor="let member of pendingMembers()" style="border-bottom: 1px solid var(--border-color);">
+            <td style="padding: 1rem; font-weight: 500;">{{ member.username }}</td>
+            <td style="padding: 1rem; color: var(--text-secondary);">{{ member.date_joined | date:'mediumDate' }}</td>
+            <td style="padding: 1rem; text-align: right; display: flex; gap: 0.5rem; justify-content: flex-end;">
+              <button class="btn" style="background: rgba(220, 38, 38, 0.1); color: rgb(220, 38, 38); border: 1px solid rgba(220,38,38,0.2);" (click)="manageMember(member.user_id, 'deny')">Deny</button>
+              <button class="btn" style="background: rgba(22, 163, 74, 0.1); color: rgb(22, 163, 74); border: 1px solid rgba(22,163,74,0.2);" (click)="manageMember(member.user_id, 'approve')">Approve</button>
+            </td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</main>

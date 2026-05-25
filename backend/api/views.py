@@ -40,13 +40,18 @@ from .crypto_utils import (
     verify_signature_with_algorithm,
 )
 from .key_utils import decrypt_private_key, ensure_user_profile
+
+# --- IMPORTING THE NEW ORGANIZATION AND USERPROFILE ---
 from .models import (
     AuditLog,
     DocumentRecord,
     DocumentVersion,
     SignatureLog,
     SignedDocumentArtifact,
+    Organization,
+    UserProfile
 )
+
 from .serializers import (
     AuditLogSerializer,
     ExportRequestSerializer,
@@ -569,37 +574,146 @@ def _benchmark_algorithm(algorithm: str, payload: bytes, runs: int) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+#  AUTH & B2B ORGANIZATION ENDPOINTS
+# ---------------------------------------------------------------------------
+
+@api_view(["POST"])
+@permission_classes([AllowAny])
+def register_org(request):
+    """Creates a new Organization and its first ORG_ADMIN."""
+    org_name = request.data.get("org_name", "").strip()
+    username = request.data.get("username", "").strip()
+    password = request.data.get("password", "")
+    signature_algorithm = request.data.get("signature_algorithm", "RSA-SHA256")
+
+    if not org_name or not username or not password:
+        return Response({"detail": "org_name, username, and password are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    User = get_user_model()
+    if User.objects.filter(username__iexact=username).exists():
+        return Response({"detail": "That username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # 1. Create the new organization
+    org = Organization.objects.create(name=org_name)
+
+    # 2. Create User and link as ORG_ADMIN
+    user = User.objects.create_user(username=username, password=password)
+    profile = ensure_user_profile(user, preferred_algorithm=signature_algorithm)
+    
+    profile.organization = org
+    profile.role = UserProfile.Role.ORG_ADMIN
+    profile.is_org_approved = True  # Admins are auto-approved for their own org
+    profile.save()
+
+    token, _ = Token.objects.get_or_create(user=user)
+    
+    return Response({
+        "token": token.key,
+        "username": user.username,
+        "role": profile.role,
+        "signature_algorithm": profile.signature_algorithm,
+        "org_name": org.name,
+        "join_code": org.join_code
+    }, status=status.HTTP_201_CREATED)
+
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
+    """Register a standard user or an organization user using an optional join_code."""
     serializer = RegisterSerializer(data=request.data)
     serializer.is_valid(raise_exception=True)
     username = serializer.validated_data["username"].strip()
     password = serializer.validated_data["password"]
     signature_algorithm = serializer.validated_data.get("signature_algorithm") or "RSA-SHA256"
+    join_code = serializer.validated_data.get("join_code", "").strip()
+
     if not username:
-        return Response(
-            {"detail": "Username is required."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response({"detail": "Username is required."}, status=status.HTTP_400_BAD_REQUEST)
+    
     User = get_user_model()
     if User.objects.filter(username__iexact=username).exists():
-        return Response(
-            {"detail": "That username is already taken."},
-            status=status.HTTP_400_BAD_REQUEST,
-        )
+        return Response({"detail": "That username is already taken."}, status=status.HTTP_400_BAD_REQUEST)
+
+    # Validate organization join code if provided
+    org = None
+    if join_code:
+        org = Organization.objects.filter(join_code=join_code).first()
+        if not org:
+            return Response({"detail": "Invalid organization join code."}, status=status.HTTP_400_BAD_REQUEST)
+
     user = User.objects.create_user(username=username, password=password)
     profile = ensure_user_profile(user, preferred_algorithm=signature_algorithm)
+
+    # Apply organizational constraints
+    if org:
+        profile.organization = org
+        profile.role = UserProfile.Role.USER
+        profile.is_org_approved = False  # Requires ORG_ADMIN approval
+    else:
+        profile.is_org_approved = True  # Independent standalone users are auto-approved
+        
+    profile.save()
+
     token, _ = Token.objects.get_or_create(user=user)
-    return Response(
-        {
-            "token": token.key,
-            "username": user.username,
-            "role": profile.role,
-            "signature_algorithm": profile.signature_algorithm,
-        },
-        status=status.HTTP_201_CREATED,
-    )
+    return Response({
+        "token": token.key,
+        "username": user.username,
+        "role": profile.role,
+        "signature_algorithm": profile.signature_algorithm,
+        "is_org_approved": profile.is_org_approved
+    }, status=status.HTTP_201_CREATED)
+
+
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def get_pending_members(request):
+    """Returns a list of unapproved users for the admin's organization."""
+    profile = ensure_user_profile(request.user)
+    
+    if profile.role != UserProfile.Role.ORG_ADMIN or not profile.organization:
+        return Response({"detail": "Forbidden. Only organization admins can view pending members."}, status=status.HTTP_403_FORBIDDEN)
+
+    pending_profiles = UserProfile.objects.filter(organization=profile.organization, is_org_approved=False).select_related('user')
+    
+    data = [{
+        "user_id": p.user.id,
+        "username": p.user.username,
+        "date_joined": p.user.date_joined.isoformat() if hasattr(p.user, 'date_joined') else None
+    } for p in pending_profiles]
+
+    return Response(data, status=status.HTTP_200_OK)
+
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def manage_member(request):
+    """Allows ORG_ADMIN to approve or deny (delete) unapproved organization members."""
+    profile = ensure_user_profile(request.user)
+    
+    if profile.role != UserProfile.Role.ORG_ADMIN or not profile.organization:
+        return Response({"detail": "Forbidden. Only organization admins can manage members."}, status=status.HTTP_403_FORBIDDEN)
+
+    user_id = request.data.get("user_id")
+    action = request.data.get("action")
+
+    if not user_id or action not in ["approve", "deny"]:
+        return Response({"detail": "user_id and valid action ('approve', 'deny') are required."}, status=status.HTTP_400_BAD_REQUEST)
+
+    target_profile = get_object_or_404(UserProfile, user__id=user_id, organization=profile.organization)
+
+    if action == "approve":
+        target_profile.is_org_approved = True
+        target_profile.save()
+        return Response({"detail": f"User {target_profile.user.username} has been approved."})
+    
+    elif action == "deny":
+        # Completely delete the user account
+        target_user = target_profile.user
+        username = target_user.username
+        target_user.delete() 
+        return Response({"detail": f"User {username} was denied and their account has been deleted."})
 
 
 @api_view(["POST"])
@@ -623,6 +737,7 @@ def login_view(request):
             "username": user.username,
             "role": profile.role,
             "signature_algorithm": profile.signature_algorithm,
+            "is_org_approved": profile.is_org_approved, # Expose for frontend UX
         }
     )
 
@@ -664,6 +779,15 @@ def sign_document(request):
 
         user = request.user
         user_profile = ensure_user_profile(user)
+
+        # --- ORG APPROVAL SECURITY CHECK ---
+        if not user_profile.is_org_approved:
+            return Response(
+                {"status": "failed", "message": "Your account is pending admin approval. You cannot sign documents yet."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # -----------------------------------
+
         digest_hex = sha256_hex(data_bytes)
 
         # Decrypt private key only in memory
@@ -1163,6 +1287,15 @@ def sign(request):
 
         user = request.user
         user_profile = ensure_user_profile(user)
+        
+        # --- ORG APPROVAL SECURITY CHECK ---
+        if not user_profile.is_org_approved:
+            return Response(
+                {"status": "failed", "message": "Your account is pending admin approval. You cannot sign documents yet."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+        # -----------------------------------
+
         digest_hex = sha256_hex(data_bytes)
 
         # Decrypt private key only in memory — NEVER return it
@@ -1219,7 +1352,7 @@ def sign(request):
 @permission_classes([IsAuthenticated])
 def logs(request):
     profile = ensure_user_profile(request.user)
-    qs = AuditLog.objects.all() if profile.role == profile.Role.ADMIN else AuditLog.objects.filter(user=request.user)
+    qs = AuditLog.objects.all() if profile.role == profile.Role.SYSTEM_ADMIN else AuditLog.objects.filter(user=request.user)
     return Response(AuditLogSerializer(qs, many=True).data)
 
 
@@ -1622,7 +1755,7 @@ def export_signed(request):
             return Response({"detail": "format must be 'json' or 'csv'."}, status=status.HTTP_400_BAD_REQUEST)
 
         profile = ensure_user_profile(request.user)
-        is_admin = profile.role == profile.Role.ADMIN
+        is_admin = profile.role == profile.Role.SYSTEM_ADMIN
         if export_type == "logs":
             qs = AuditLog.objects.all() if is_admin else AuditLog.objects.filter(user=request.user)
             data_rows = [

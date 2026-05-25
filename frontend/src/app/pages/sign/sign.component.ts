@@ -1,10 +1,10 @@
 import { CommonModule } from '@angular/common';
-import { Component, ElementRef, ViewChild, inject, signal } from '@angular/core';
+import { Component, inject, OnInit, signal } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { finalize } from 'rxjs/operators';
 import { NavbarComponent } from '../../components/navbar/navbar.component';
 import { AuthService } from '../../services/auth.service';
-import { SignatureApiService, SupportedAlgorithm } from '../../services/signature-api.service';
+import { SignatureApiService } from '../../services/signature-api.service';
 
 @Component({
   selector: 'app-sign',
@@ -13,11 +13,12 @@ import { SignatureApiService, SupportedAlgorithm } from '../../services/signatur
   templateUrl: './sign.component.html',
   styleUrl: './sign.component.css',
 })
-export class SignComponent {
-  @ViewChild('signFileInput') signFileInputRef?: ElementRef<HTMLInputElement>;
-
-  private readonly api = inject(SignatureApiService);
-  private readonly auth = inject(AuthService);
+export class SignComponent implements OnInit {
+  // MUST BE PUBLIC to use in the HTML template
+  public auth = inject(AuthService);
+  private api = inject(SignatureApiService);
+  
+  // ... Keep the exact rest of your existing logic in this file unchanged ...
 
   /* ── State ─────────────────────────────────────── */
   selectedFile: File | null = null;

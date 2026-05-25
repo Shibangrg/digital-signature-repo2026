@@ -2,13 +2,12 @@ import { inject } from '@angular/core';
 import { CanActivateFn, Router } from '@angular/router';
 import { AuthService } from '../services/auth.service';
 
-/** Redirect to dashboard if already authenticated. */
-export const guestGuard: CanActivateFn = () => {
+export const guestGuard: CanActivateFn = (route, state) => {
   const auth = inject(AuthService);
   const router = inject(Router);
-  if (!auth.isLoggedIn()) {
+  
+  if (!auth.currentUser()) {
     return true;
   }
-  void router.navigate(['/']);
-  return false;
+  return router.parseUrl('/sign');
 };

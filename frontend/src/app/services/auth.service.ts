@@ -1,116 +1,86 @@
 import { HttpClient } from '@angular/common/http';
-import { Injectable, inject, signal } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { Router } from '@angular/router';
-import { Observable, catchError, tap, throwError } from 'rxjs';
+import { Observable, tap } from 'rxjs';
 import { environment } from '../../environments/environment';
-
-const TOKEN_KEY = 'ds_auth_token';
-const USER_KEY = 'ds_auth_username';
-const ROLE_KEY = 'ds_auth_role';
-const ALGO_KEY = 'ds_auth_algo';
-
-export type UserRole = 'admin' | 'user';
-export type SignatureAlgorithm = 'RSA-SHA256' | 'ECDSA-P256-SHA256';
 
 export interface AuthResponse {
   token: string;
   username: string;
-  role: UserRole;
-  signature_algorithm?: SignatureAlgorithm;
+  role?: string;
+  signature_algorithm?: string;
+  is_org_approved?: boolean;
+  join_code?: string;
+  org_name?: string;
 }
 
-@Injectable({ providedIn: 'root' })
+export interface PendingMember {
+  user_id: number;
+  username: string;
+  date_joined: string;
+}
+
+@Injectable({
+  providedIn: 'root',
+})
 export class AuthService {
-  private readonly http = inject(HttpClient);
-  private readonly router = inject(Router);
-  private readonly base = environment.apiBaseUrl;
+private apiUrl = environment.apiBaseUrl;  
+  currentUser = signal<AuthResponse | null>(this.loadUserFromStorage());
 
-  readonly token = signal<string | null>(null);
-  readonly username = signal<string | null>(null);
-  readonly role = signal<UserRole>('user');
-  readonly signatureAlgorithm = signal<SignatureAlgorithm>('RSA-SHA256');
+  constructor(private http: HttpClient, private router: Router) {}
 
-  constructor() {
-    this.restoreSession();
+  private loadUserFromStorage(): AuthResponse | null {
+    const data = localStorage.getItem('auth_user');
+    return data ? JSON.parse(data) : null;
   }
 
-  private restoreSession(): void {
-    const t = localStorage.getItem(TOKEN_KEY);
-    const u = localStorage.getItem(USER_KEY);
-    const r = localStorage.getItem(ROLE_KEY) as UserRole | null;
-    const a = localStorage.getItem(ALGO_KEY) as SignatureAlgorithm | null;
-    this.token.set(t);
-    this.username.set(u);
-    this.role.set(r === 'admin' ? 'admin' : 'user');
-    this.signatureAlgorithm.set(a === 'ECDSA-P256-SHA256' ? 'ECDSA-P256-SHA256' : 'RSA-SHA256');
+  private saveSession(res: AuthResponse): void {
+    localStorage.setItem('auth_token', res.token);
+    localStorage.setItem('auth_user', JSON.stringify(res));
+    this.currentUser.set(res);
   }
 
-  isLoggedIn(): boolean {
-    return !!this.token();
+  // --- STANDARD AUTH ---
+  login(payload: any): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/login`, payload).pipe(
+      tap((res) => this.saveSession(res))
+    );
   }
 
-  clearLocal(): void {
-    localStorage.clear();
-    this.token.set(null);
-    this.username.set(null);
-    this.role.set('user');
-    this.signatureAlgorithm.set('RSA-SHA256');
+  register(payload: any): Observable<AuthResponse> {
+    // Payload may include optional 'join_code'
+    return this.http.post<AuthResponse>(`${this.apiUrl}/register`, payload).pipe(
+      tap((res) => this.saveSession(res))
+    );
   }
 
-  private persist(res: AuthResponse): void {
-    localStorage.setItem(TOKEN_KEY, res.token);
-    localStorage.setItem(USER_KEY, res.username);
-    localStorage.setItem(ROLE_KEY, res.role);
-    localStorage.setItem(ALGO_KEY, res.signature_algorithm ?? 'RSA-SHA256');
-    this.token.set(res.token);
-    this.username.set(res.username);
-    this.role.set(res.role);
-    this.signatureAlgorithm.set(res.signature_algorithm === 'ECDSA-P256-SHA256' ? 'ECDSA-P256-SHA256' : 'RSA-SHA256');
+  // --- B2B ORGANIZATION AUTH ---
+  registerOrg(payload: any): Observable<AuthResponse> {
+    return this.http.post<AuthResponse>(`${this.apiUrl}/register-org`, payload).pipe(
+      tap((res) => this.saveSession(res))
+    );
   }
 
-  login(username: string, password: string): Observable<AuthResponse> {
-    return this.http
-      .post<AuthResponse>(`${this.base}/login`, { username, password })
-      .pipe(
-        tap((res) => this.persist(res)),
-        catchError((err) => throwError(() => err))
-      );
+  getPendingMembers(): Observable<PendingMember[]> {
+    return this.http.get<PendingMember[]>(`${this.apiUrl}/org/pending-members`);
   }
 
-  register(
-    username: string,
-    password: string,
-    signatureAlgorithm: SignatureAlgorithm = 'RSA-SHA256'
-  ): Observable<AuthResponse> {
-    return this.http
-      .post<AuthResponse>(`${this.base}/register`, {
-        username,
-        password,
-        signature_algorithm: signatureAlgorithm,
-      })
-      .pipe(
-        tap((res) => this.persist(res)),
-        catchError((err) => throwError(() => err))
-      );
+  manageMember(userId: number, action: 'approve' | 'deny'): Observable<any> {
+    return this.http.post(`${this.apiUrl}/org/manage-member`, { user_id: userId, action });
   }
 
+  // --- LOGOUT ---
   logout(): void {
-    if (!this.token()) {
-      this.clearLocal();
-      void this.router.navigate(['/login']);
-      return;
-    }
-    this.http.post(`${this.base}/logout`, {}).subscribe({
-      next: () => {
-        this.clearLocal();
-        sessionStorage.clear();
-        void this.router.navigate(['/login']);
-      },
-      error: () => {
-        this.clearLocal();
-        sessionStorage.clear();
-        void this.router.navigate(['/login']);
-      },
+    this.http.post(`${this.apiUrl}/logout`, {}).subscribe({
+      next: () => this.clearSession(),
+      error: () => this.clearSession(),
     });
+  }
+
+  private clearSession(): void {
+    localStorage.removeItem('auth_token');
+    localStorage.removeItem('auth_user');
+    this.currentUser.set(null);
+    this.router.navigate(['/login']);
   }
 }

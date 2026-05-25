@@ -1,7 +1,5 @@
 from rest_framework import serializers
-
 from .models import AuditLog, SignatureLog
-
 
 class RegisterSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150, trim_whitespace=True)
@@ -11,7 +9,8 @@ class RegisterSerializer(serializers.Serializer):
         required=False,
         default="RSA-SHA256",
     )
-
+    # New optional field for joining an organization
+    join_code = serializers.CharField(required=False, allow_blank=True, max_length=8)
 
 class LoginSerializer(serializers.Serializer):
     username = serializers.CharField(max_length=150, trim_whitespace=True)
