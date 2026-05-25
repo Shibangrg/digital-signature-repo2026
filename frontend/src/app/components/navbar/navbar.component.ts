@@ -20,6 +20,8 @@ export class NavbarComponent {
   certificateModalOpen = signal(false);
   myCertificate = signal<string | null>(null);
   myCertificateLoading = signal(false);
+  algoSaving = signal(false);
+  algoError = signal<string | null>(null);
 
   constructor() {
     this.loadMyCertificate();
@@ -48,7 +50,14 @@ export class NavbarComponent {
       .myCertificate()
       .pipe(finalize(() => this.myCertificateLoading.set(false)))
       .subscribe({
-        next: (res) => this.myCertificate.set(res.certificate ?? null),
+        next: (res) => {
+          this.myCertificate.set(res.certificate ?? null);
+          if (res.signature_algorithm) {
+            this.auth.signatureAlgorithm.set(
+              res.signature_algorithm === 'ECDSA-P256-SHA256' ? 'ECDSA-P256-SHA256' : 'RSA-SHA256'
+            );
+          }
+        },
         error: () => this.myCertificate.set(null),
       });
   }
@@ -68,5 +77,22 @@ export class NavbarComponent {
     const text = (content || '').trim();
     if (!text || !navigator.clipboard) return;
     void navigator.clipboard.writeText(text);
+  }
+
+  setAlgorithm(algo: 'RSA-SHA256' | 'ECDSA-P256-SHA256'): void {
+    this.algoError.set(null);
+    this.algoSaving.set(true);
+    this.api
+      .setSignatureAlgorithm(algo)
+      .pipe(finalize(() => this.algoSaving.set(false)))
+      .subscribe({
+        next: (res) => {
+          const a = (res.signature_algorithm || algo) as 'RSA-SHA256' | 'ECDSA-P256-SHA256';
+          this.auth.signatureAlgorithm.set(a);
+          // Switching algorithm regenerates cert, so refresh it.
+          this.loadMyCertificate();
+        },
+        error: () => this.algoError.set('Could not update algorithm.'),
+      });
   }
 }

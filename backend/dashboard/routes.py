@@ -1,14 +1,20 @@
 """
 Dashboard API Routes
 """
+from django.urls import path
 from flask import Blueprint, request, jsonify
 from datetime import datetime
 from .service import DashboardService
 from .models import User, UserRole, ActivityType, SystemMetrics
+from . import service  # Ensure your service.py/views.py is imported here
 
 # Create blueprint
 dashboard_bp = Blueprint('dashboard', __name__, url_prefix='/api/dashboard')
 dashboard_service = DashboardService()
+urlpatterns = [
+    # Map the path (e.g., /api/dashboard/) to a function in your service
+    path('', service.get_dashboard_data, name='dashboard-data'),
+]
 
 
 @dashboard_bp.route('/summary', methods=['GET'])

@@ -4,8 +4,12 @@ Dashboard Service for Business Logic
 from datetime import datetime, timedelta
 from typing import Dict, List, Optional
 from .models import User, Activity, SystemMetrics, Report, UserRole, ActivityType
+from rest_framework.decorators import api_view
+from rest_framework.response import Response
 
-
+@api_view(['GET'])
+def get_dashboard_data(request):
+    return Response({"message": "Success", "data": ...})
 class DashboardService:
     """Service for dashboard operations"""
     

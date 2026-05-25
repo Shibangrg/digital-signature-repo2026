@@ -1,8 +1,8 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
-import { DashboardService } from '../services/dashboard.service';
-import { Subject } from 'rxjs';
-import { takeUntil, interval } from 'rxjs';
+import { CommonModule } from '@angular/common'; // Add this line
+import { Component, OnDestroy, OnInit } from '@angular/core';
+import { interval, Subject, takeUntil } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
+import { DashboardService } from '../services/dashboard.service';
 
 export interface DashboardSummary {
   metrics: SystemMetrics;
@@ -45,8 +45,10 @@ export interface SystemHealth {
 
 @Component({
   selector: 'app-dashboard',
+  standalone: true,
+  imports: [CommonModule], // Add this if you use directives like *ngIf
   templateUrl: './dashboard.component.html',
-  styleUrls: ['./dashboard.component.css']
+  styleUrl: './dashboard.component.css',
 })
 export class DashboardComponent implements OnInit, OnDestroy {
   dashboardData: DashboardSummary | null = null;
