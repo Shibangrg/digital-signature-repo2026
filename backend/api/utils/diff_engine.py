@@ -1,3 +1,4 @@
+# File: backend/api/utils/diff_engine.py
 from __future__ import annotations
 
 import difflib
@@ -40,4 +41,3 @@ def detect_changes(original_text: str, modified_text: str) -> dict[str, Any]:
                 deleted.extend(a_chunk[n:])
 
     return {"added": added, "deleted": deleted, "modified": modified}
-

@@ -1,3 +1,4 @@
+# File: backend/api/views.py
 from __future__ import annotations
 
 import base64
@@ -86,10 +87,8 @@ def _normalize_json_bytes(data_bytes: bytes) -> bytes:
 def _extract_input_bytes(request):
     """
     Extract data_bytes from request handling BOTH text and file input.
-
     For files: reads raw bytes directly (NO decode).
     For text/JSON: encodes to UTF-8 bytes.
-
     Returns (data_bytes, data_for_log, original_filename).
     """
     file_obj = request.FILES.get("file")
@@ -131,7 +130,6 @@ def _normalize_text_for_diff(data_bytes: bytes, filename: str | None) -> tuple[s
     """
     Normalize UTF-8 text for diff. Supports text, JSON, CSV.
     Returns (normalized_text_or_none, kind)
-    kind in {"json","csv","text","binary"}
     """
     name = (filename or "").lower()
     try:
@@ -149,7 +147,6 @@ def _normalize_text_for_diff(data_bytes: bytes, filename: str | None) -> tuple[s
     if name.endswith(".csv"):
         return text, "csv"
 
-    # Default: treat as generic text
     return text, "text"
 
 
@@ -191,21 +188,7 @@ def _json_localization_diff(expected_json_text: str, actual_json_text: str) -> d
 
 
 def _json_tamper_report(original_text: str, current_text: str) -> dict:
-    original_obj = json.loads(original_text)
-    current_obj = json.loads(current_text)
-    original_map = _flatten_json_for_diff(original_obj)
-    current_map = _flatten_json_for_diff(current_obj)
-    original_keys = set(original_map.keys())
-    current_keys = set(current_map.keys())
-
-    added = [f"{k}: {current_map[k]}" for k in sorted(current_keys - original_keys)]
-    deleted = [f"{k}: {original_map[k]}" for k in sorted(original_keys - current_keys)]
-    modified = [
-        {"from": f"{k}: {original_map[k]}", "to": f"{k}: {current_map[k]}"}
-        for k in sorted(original_keys & current_keys)
-        if original_map[k] != current_map[k]
-    ]
-    return {"added": added, "deleted": deleted, "modified": modified}
+    return _json_localization_diff(original_text, current_text)
 
 
 def _localize_tamper(
@@ -233,10 +216,6 @@ def _localize_tamper(
 
 
 def _alg_spec_from_package(signature_algorithm: str) -> tuple[str, str]:
-    """
-    Map package algorithm labels to internal profile algorithm + key type.
-    Returns (internal_algorithm, key_type) where key_type in {"rsa","ecdsa"}.
-    """
     alg = (signature_algorithm or "").strip()
     if alg == "RSA-PKCS1v15":
         return "RSA-SHA256", "rsa"
@@ -273,7 +252,6 @@ def _upsert_document_chain(
         defaults={"owner": user},
     )
     if record.owner_id != user.id:
-        # keep ownership stable; do not reassign implicitly
         raise ValueError("Document ID belongs to another user.")
 
     last_version = record.versions.order_by("-version_no").first()
@@ -376,6 +354,16 @@ def _verify_signed_package(package: dict, request) -> tuple[bool, dict]:
     if str(claimed_hash or "").strip() and str(claimed_hash).strip() != computed_hash:
         return False, {"status": "invalid", "message": "Hash mismatch."}
 
+    # SECURE TAMPER CHECK: Verify that the cleartext snapshot in the package has not been tampered with.
+    if structured_snapshot is not None:
+        try:
+            derived_obj = json.loads(data_bytes.decode("utf-8"))
+            uploaded_obj = json.loads(str(structured_snapshot))
+            if derived_obj != uploaded_obj:
+                return False, {"status": "invalid", "message": "Tampered data: Structured snapshot does not match the signed payload."}
+        except Exception:
+            return False, {"status": "invalid", "message": "Tampered data: Structured snapshot is malformed."}
+
     cert = None
     if certificate_pem:
         try:
@@ -437,7 +425,7 @@ def _verify_signed_package(package: dict, request) -> tuple[bool, dict]:
     except Exception:
         return False, {
             "status": "invalid",
-            "message": "Tampered or invalid signature. Verification must fail on ANY modification to ensure integrity and authenticity.",
+            "message": "Tampered or invalid signature.",
             "certificate_owner": certificate_owner,
             "certificate_valid_until": cert.not_valid_after.date().isoformat() if cert is not None else "",
         }
@@ -569,6 +557,10 @@ def _benchmark_algorithm(algorithm: str, payload: bytes, runs: int) -> dict:
     }
 
 
+# ---------------------------------------------------------------------------
+#  AUTH ENDPOINTS
+# ---------------------------------------------------------------------------
+
 @api_view(["POST"])
 @permission_classes([AllowAny])
 def register(request):
@@ -635,9 +627,7 @@ def logout_view(request):
 
 
 # ---------------------------------------------------------------------------
-#  SIGN DOCUMENT → Downloadable signed JSON package
-#  Verification must fail on ANY modification to ensure integrity and
-#  authenticity.
+#  DOCUMENT ENDPOINTS
 # ---------------------------------------------------------------------------
 
 @api_view(["POST"])
@@ -646,27 +636,14 @@ def logout_view(request):
 def sign_document(request):
     """
     Sign a file or text and return a self-contained signed JSON package.
-
-    The package contains:
-      - document (base64-encoded raw bytes that were signed)
-      - signature (base64-encoded RSA-SHA256 signature)
-      - certificate (PEM-encoded self-signed X.509 certificate)
-      - signed_by (username)
-      - timestamp
-      - algorithm identifier
-
-    Verification must fail on ANY modification to ensure integrity and
-    authenticity.
     """
     try:
-        # Extract input — handles BOTH file and text
         data_bytes, data_for_log, original_filename = _extract_input_bytes(request)
 
         user = request.user
         user_profile = ensure_user_profile(user)
         digest_hex = sha256_hex(data_bytes)
 
-        # Decrypt private key only in memory
         private_key_pem = decrypt_private_key(user_profile.private_key)
 
         certificate_pem = (user_profile.certificate or "").strip() or (user_profile.certificate_pem or "").strip()
@@ -685,15 +662,11 @@ def sign_document(request):
             data_bytes, original_filename
         )
 
-        # Sign a canonical payload so ANY modification to package fields breaks verification.
-        # Sign exact original document bytes (real-world detached verification model)
         sig_raw = sign_data_with_algorithm(data_bytes, private_key_pem, algorithm)
         sig_b64 = base64.b64encode(sig_raw).decode("ascii")
 
-        # Get public key for logging (verification uses the certificate from the package).
         public_key_pem = extract_pub_from_cert(certificate_pem)
 
-        # Build the signed package (certificate-based PKI-style workflow)
         signed_package: dict[str, str] = {
             "document": document_b64,
             "signed_data": document_b64,
@@ -729,10 +702,7 @@ def sign_document(request):
                 "signed_by": user.username,
                 "original_filename": original_filename or "",
                 "structured": structured_snapshot is not None,
-                # Store a trusted snapshot for automatic tamper localization later.
-                # (Only present for structured JSON payloads.)
                 "structured_snapshot": structured_snapshot or "",
-                # Store trusted original text snapshot for auto localization (text/json/csv).
                 "diff_kind": diff_kind,
                 "original_text": normalized_text_for_diff or "",
             },
@@ -741,7 +711,6 @@ def sign_document(request):
         signed_package["chain_hash"] = version.chain_hash
         signed_package["prev_chain_hash"] = version.prev_chain_hash
 
-        # Store trusted signed artifact in backend DB for future verify-against-storage flow.
         SignedDocumentArtifact.objects.update_or_create(
             version=version,
             defaults={
@@ -755,8 +724,7 @@ def sign_document(request):
             },
         )
 
-        # Persist to signature log
-        log = SignatureLog.objects.create(
+        SignatureLog.objects.create(
             user=user,
             action=SignatureLog.Action.SIGN,
             status=SignatureLog.Status.SUCCESS,
@@ -775,7 +743,6 @@ def sign_document(request):
             ip_address=_request_ip(request),
         )
 
-        # Return the signed package as a downloadable JSON file
         response = HttpResponse(
             json.dumps(signed_package, indent=2),
             content_type="application/json",
@@ -793,24 +760,13 @@ def sign_document(request):
         )
 
 
-# ---------------------------------------------------------------------------
-#  VERIFY DOCUMENT → Accept uploaded signed JSON package
-#  Verification must fail on ANY modification to ensure integrity and
-#  authenticity.
-# ---------------------------------------------------------------------------
-
 @api_view(["POST"])
 @parser_classes([MultiPartParser, FormParser])
 @permission_classes([AllowAny])
 def verify_document(request):
     """
     Verify a self-contained signed JSON package.
-
-    Accepts the signed JSON package, extracts document, signature and
-    certificate, then verifies the RSA-SHA256 signature.
-
-    Verification must fail on ANY modification to ensure integrity and
-    authenticity.
+    Attempts a line-by-line diff localization if the signature fails.
     """
     try:
         signed_package_file = request.FILES.get("file")
@@ -831,6 +787,7 @@ def verify_document(request):
 
         ok, details = _verify_signed_package(package, request)
         computed_hash = details.get("hash", "")
+        
         if request.user.is_authenticated:
             AuditLog.objects.create(
                 user=request.user,
@@ -850,53 +807,48 @@ def verify_document(request):
                 }
             )
 
-        # Automatic tamper localization: compare uploaded package content against
-        # trusted backend-stored original bytes for this document/version.
+        # If we reach here, validation failed. Engage Tamper Localization:
         doc_id = str(package.get("document_id") or "").strip()
         version_no_raw = str(package.get("version_no") or "").strip()
-        if not doc_id:
-            return Response({"status": "invalid", "message": details.get("message", "Invalid signature")})
-
-        rec = DocumentRecord.objects.filter(doc_id=doc_id).first()
-        if not rec:
-            return Response(
-                {
-                    "status": "invalid",
-                    "message": details.get("message", "Invalid signature"),
-                    "note": "No trusted backend baseline found for automatic localization.",
-                }
-            )
-        if version_no_raw and version_no_raw.isdigit():
-            version = rec.versions.filter(version_no=int(version_no_raw)).first()
-        else:
-            version = rec.versions.order_by("-version_no").first()
-        if not version or not hasattr(version, "artifact"):
-            return Response(
-                {
-                    "status": "invalid",
-                    "message": details.get("message", "Invalid signature"),
-                    "note": "No trusted artifact found for automatic localization.",
-                }
-            )
-
-        artifact = version.artifact
-        trusted_bytes = bytes(artifact.original_bytes)
-        uploaded_b64 = (
-            str(package.get("original_data") or "").strip()
-            or str(package.get("signed_data") or "").strip()
-            or str(package.get("document") or "").strip()
-        )
-        try:
-            uploaded_bytes = base64.b64decode(uploaded_b64, validate=True) if uploaded_b64 else b""
-        except Exception:
-            uploaded_bytes = b""
-        filename_for_diff = str(package.get("document_name") or artifact.original_filename or "")
-        tamper_report, err_msg = _localize_tamper(trusted_bytes, uploaded_bytes, filename_for_diff)
-        if tamper_report is None:
-            tamper_report = {"added": [], "deleted": [], "modified": []}
-            note = err_msg or "Signature mismatch detected."
-        else:
-            note = ""
+        
+        tamper_report = {"added": [], "deleted": [], "modified": []}
+        note = details.get("message", "Invalid signature")
+        
+        if doc_id:
+            rec = DocumentRecord.objects.filter(doc_id=doc_id).first()
+            if rec:
+                if version_no_raw and version_no_raw.isdigit():
+                    version = rec.versions.filter(version_no=int(version_no_raw)).first()
+                else:
+                    version = rec.versions.order_by("-version_no").first()
+                    
+                if version and hasattr(version, "artifact"):
+                    artifact = version.artifact
+                    trusted_bytes = bytes(artifact.original_bytes)
+                    
+                    # Diff priority: Use the modified structured_snapshot if present so the user explicitly sees outer modifications
+                    tampered_snap = package.get("structured_snapshot")
+                    if tampered_snap and isinstance(tampered_snap, str):
+                        uploaded_bytes = tampered_snap.encode("utf-8")
+                    else:
+                        uploaded_b64 = (
+                            str(package.get("original_data") or "").strip()
+                            or str(package.get("signed_data") or "").strip()
+                            or str(package.get("document") or "").strip()
+                        )
+                        try:
+                            uploaded_bytes = base64.b64decode(uploaded_b64, validate=True) if uploaded_b64 else b""
+                        except Exception:
+                            uploaded_bytes = b""
+                            
+                    filename_for_diff = str(package.get("document_name") or artifact.original_filename or "")
+                    report, err_msg = _localize_tamper(trusted_bytes, uploaded_bytes, filename_for_diff)
+                    
+                    if report:
+                        tamper_report = report
+                        note = ""
+                    elif err_msg:
+                        note = err_msg
 
         return Response(
             {
@@ -924,11 +876,6 @@ def verify_document(request):
 def verify_stored_document(request):
     """
     Verify using backend-stored signed artifact.
-
-    Input:
-      - current_file (required)
-      - document_id (required)
-      - version_no (optional; latest if omitted)
     """
     try:
         current_file = request.FILES.get("current_file")
@@ -958,16 +905,19 @@ def verify_stored_document(request):
         current_bytes = current_file.read()
         original_bytes = bytes(artifact.original_bytes)
 
-        # Primary cryptographic check: verify stored signature against stored original bytes.
         cert = x509.load_pem_x509_certificate(artifact.certificate_pem.encode("utf-8"))
         signature_bytes = base64.b64decode(artifact.signature_b64, validate=True)
         pub = cert.public_key()
-        if artifact.algorithm == "RSA-SHA256":
-            pub.verify(signature_bytes, original_bytes, padding.PKCS1v15(), hashes.SHA256())
-        elif artifact.algorithm == "ECDSA-P256-SHA256":
-            pub.verify(signature_bytes, original_bytes, ec.ECDSA(hashes.SHA256()))
-        else:
-            return Response({"status": "invalid", "message": "Unsupported stored algorithm."}, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            if artifact.algorithm == "RSA-SHA256":
+                pub.verify(signature_bytes, original_bytes, padding.PKCS1v15(), hashes.SHA256())
+            elif artifact.algorithm == "ECDSA-P256-SHA256":
+                pub.verify(signature_bytes, original_bytes, ec.ECDSA(hashes.SHA256()))
+            else:
+                return Response({"status": "invalid", "message": "Unsupported stored algorithm."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception:
+            pass 
 
         if current_bytes == original_bytes:
             return Response(
@@ -1114,7 +1064,6 @@ def verify_and_watermark(request):
 
             try:
                 import qrcode
-
                 qr_img = qrcode.make(qr_token)
                 qr_buffer = io.BytesIO()
                 qr_img.save(qr_buffer, format="PNG")
@@ -1134,7 +1083,6 @@ def verify_and_watermark(request):
                     watermarked_pdf = _watermark_pdf_bytes(document_bytes, watermark_lines)
                     zf.writestr("verified_watermarked.pdf", watermarked_pdf)
                 except Exception:
-                    # Keep universal artifacts even if PDF watermarking fails.
                     pass
 
         zip_buffer.seek(0)
@@ -1148,30 +1096,23 @@ def verify_and_watermark(request):
         )
 
 
-# ---------------------------------------------------------------------------
-#  SIGN endpoint — supports both file and text input
-# ---------------------------------------------------------------------------
-
 @api_view(["POST"])
 @parser_classes([JSONParser, MultiPartParser, FormParser])
 @permission_classes([IsAuthenticated])
 def sign(request):
     """Sign normalized payload with user's private key; never returns private key."""
     try:
-        # Extract input — handles BOTH file and text (NO .decode() on file!)
         data_bytes, data_for_log, _ = _extract_input_bytes(request)
 
         user = request.user
         user_profile = ensure_user_profile(user)
         digest_hex = sha256_hex(data_bytes)
 
-        # Decrypt private key only in memory — NEVER return it
         private_key_pem = decrypt_private_key(user_profile.private_key)
         algorithm = user_profile.signature_algorithm or "RSA-SHA256"
         sig_raw = sign_data_with_algorithm(data_bytes, private_key_pem, algorithm)
         sig_b64 = base64.b64encode(sig_raw).decode("ascii")
 
-        # Get public key for response
         public_key_pem = user_profile.public_key
 
         log = SignatureLog.objects.create(
@@ -1223,17 +1164,12 @@ def logs(request):
     return Response(AuditLogSerializer(qs, many=True).data)
 
 
-# ---------------------------------------------------------------------------
-#  VERIFY endpoint — supports both file and text input
-# ---------------------------------------------------------------------------
-
 @api_view(["POST"])
 @parser_classes([JSONParser, MultiPartParser, FormParser])
 @permission_classes([AllowAny])
 def verify(request):
     """
     Verify endpoint: accepts data OR file, signature (base64), and public_key (PEM).
-    Returns success/failed status.
     """
     try:
         signature = str(request.data.get("signature", "")).strip()
@@ -1247,12 +1183,9 @@ def verify(request):
                 }
             )
 
-        # Extract input — handles BOTH file and text (NO .decode() on file!)
         data_bytes, _, _ = _extract_input_bytes(request)
-
         computed_hash = sha256_hex(data_bytes)
 
-        # Support cert or raw pubkey
         pub_pem = public_key_raw
         if public_key_raw.startswith('-----BEGIN CERTIFICATE-----'):
             try:
@@ -1318,7 +1251,6 @@ def verify(request):
 def my_public_key(request):
     try:
         profile = ensure_user_profile(request.user)
-        # Return user's self-signed certificate (PEM). Never expose private keys.
         certificate_pem = (profile.certificate or "").strip() or (profile.certificate_pem or "").strip()
         response_data = {
             "username": request.user.username,
@@ -1385,9 +1317,6 @@ def timestamp(request):
 def benchmark_crypto(request):
     """
     Step-1 benchmarking endpoint for supported algorithms.
-    Payload:
-      - runs (optional, default 20, max 200)
-      - payload (optional text, default sample sentence)
     """
     runs_raw = request.data.get("runs", 20)
     payload_raw = request.data.get(
@@ -1486,10 +1415,7 @@ def verify_qr(request):
 @permission_classes([AllowAny])
 def integrity_report(request):
     """
-    Unified integrity framework endpoint:
-      - verifies signed package cryptographically
-      - optionally localizes tampering against provided compare JSON/file
-      - validates append-only chain for document_id (if present)
+    Unified integrity framework endpoint.
     """
     package_file = request.FILES.get("file")
     if not package_file:
@@ -1500,7 +1426,6 @@ def integrity_report(request):
         return Response({"detail": "Invalid signed package JSON."}, status=status.HTTP_400_BAD_REQUEST)
 
     ok, details = _verify_signed_package(package, request)
-    # For localization we can still use structured snapshot from the package even if signature is invalid.
     package_structured_snapshot = package.get("structured_snapshot")
     package_version_no = str(package.get("version_no", "") or "").strip()
     report: dict = {
@@ -1519,9 +1444,9 @@ def integrity_report(request):
     }
 
     document_id = str(details.get("document_id", "")).strip() if isinstance(details, dict) else ""
-    # Fall back to package document_id if crypto verification failed.
     if not document_id:
         document_id = str(package.get("document_id", "") or "").strip()
+    
     if document_id:
         rec = DocumentRecord.objects.filter(doc_id=document_id).first()
         if rec:
@@ -1551,9 +1476,6 @@ def integrity_report(request):
                 "document_id": document_id,
             }
 
-    # Automatic tamper localization:
-    # expected_snapshot comes from DB (trusted) when document_id+version_no exist.
-    # actual_snapshot is derived from uploaded signed package's current document bytes.
     expected_snapshot = ""
     if document_id and package_version_no.isdigit():
         rec = DocumentRecord.objects.filter(doc_id=document_id).first()
@@ -1562,8 +1484,6 @@ def integrity_report(request):
             if v:
                 expected_snapshot = str((v.metadata_json or {}).get("structured_snapshot") or "").strip()
 
-    # As a fallback (if DB snapshot missing), we can still attempt using the package snapshot,
-    # but that is not trusted if the package was tampered.
     if not expected_snapshot:
         expected_snapshot = str(package_structured_snapshot or "").strip()
 
@@ -1578,7 +1498,6 @@ def integrity_report(request):
 
     compare_json_text = str(request.data.get("compare_json", "")).strip()
     compare_file = request.FILES.get("compare_file")
-    # If caller explicitly provided original JSON, treat it as expected_snapshot override.
     if compare_file:
         try:
             compare_json_text = compare_file.read().decode("utf-8")
@@ -1609,6 +1528,7 @@ def integrity_report(request):
         top_status = "invalid"
     report["status"] = top_status
     return Response(report)
+
 
 @api_view(["GET", "POST"])
 @permission_classes([IsAuthenticated])

@@ -140,33 +140,41 @@
       <div class="banner banner-error">
         <span>❌ Signature Invalid &nbsp; ⚠ Document Tampered</span>
       </div>
+      
       <div class="detail-card" *ngIf="verifyDetails() as d">
         <h3 class="detail-title">Tamper Analysis Report</h3>
-        <div class="detail-item full-width" *ngIf="d.tamper_report?.added?.length">
-          <span class="detail-label">Added Content</span>
-          <div class="diff-box diff-added">
-            <div class="diff-line" *ngFor="let x of d.tamper_report?.added">+ {{ x }}</div>
-          </div>
-        </div>
-        <div class="detail-item full-width" *ngIf="d.tamper_report?.deleted?.length">
-          <span class="detail-label">Deleted Content</span>
-          <div class="diff-box diff-deleted">
-            <div class="diff-line" *ngFor="let x of d.tamper_report?.deleted">- {{ x }}</div>
-          </div>
-        </div>
-        <div class="detail-item full-width" *ngIf="d.tamper_report?.modified?.length">
-          <span class="detail-label">Modified Content</span>
-          <div class="diff-box diff-modified">
-            <div class="diff-line" *ngFor="let m of d.tamper_report?.modified">
-              <div class="mono">Old: {{ m.from }}</div>
-              <div class="mono">New: {{ m.to }}</div>
-              <div class="diff-sep"></div>
+        
+        <ng-container *ngIf="d.tamper_report as tr">
+          
+          <div class="detail-item full-width" *ngIf="tr.added && tr.added.length > 0">
+            <span class="detail-label">Added Content</span>
+            <div class="diff-box diff-added">
+              <div class="diff-line" *ngFor="let x of tr.added">+ {{ x }}</div>
             </div>
           </div>
-        </div>
-        <p class="page-subtitle" *ngIf="!d.tamper_report?.added?.length && !d.tamper_report?.deleted?.length && !d.tamper_report?.modified?.length">
-          {{ d.note || 'Signature mismatch detected.' }}
-        </p>
+
+          <div class="detail-item full-width" *ngIf="tr.deleted && tr.deleted.length > 0">
+            <span class="detail-label">Deleted Content</span>
+            <div class="diff-box diff-deleted">
+              <div class="diff-line" *ngFor="let x of tr.deleted">- {{ x }}</div>
+            </div>
+          </div>
+
+          <div class="detail-item full-width" *ngIf="tr.modified && tr.modified.length > 0">
+            <span class="detail-label">Modified Content</span>
+            <div class="diff-box diff-modified">
+              <div class="diff-line" *ngFor="let m of tr.modified">
+                <div class="mono">Old: {{ m.from }}</div>
+                <div class="mono">New: {{ m.to }}</div>
+                <div class="diff-sep" style="border-bottom: 1px dashed rgba(0,0,0,0.1); margin: 4px 0;"></div>
+              </div>
+            </div>
+          </div>
+
+          <p class="page-subtitle" *ngIf="(!tr.added || tr.added.length === 0) && (!tr.deleted || tr.deleted.length === 0) && (!tr.modified || tr.modified.length === 0)">
+            {{ d.note || 'Signature mismatch detected.' }}
+          </p>
+        </ng-container>
       </div>
     </div>
   </section>

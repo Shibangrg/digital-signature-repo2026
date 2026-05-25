@@ -104,29 +104,28 @@ export class VerifyComponent {
       .pipe(finalize(() => this.verifyLoading.set(false)))
       .subscribe({
         next: (res: VerifyResult) => {
+          this.verifyDetails.set(res);
+
           if (res.status === 'valid') {
             this.verifySuccess.set(true);
             this.verifyError.set(null);
 
-            // Supplement backend response with data parsed directly from the validated JSON file
+            // Supplement details natively preferring the secure backend response
             const pkg = this.parsedPackage() || {};
-            this.verifyDetails.set({
+            this.verifyDetails.update(current => ({
               ...pkg,
-              ...res,
-              timestamp: pkg.timestamp || res.timestamp,
-              signed_by: pkg.signed_by || res.signed_by,
-              algorithm: pkg.algorithm || res.algorithm_used || res.algorithm,
-              hash: pkg.hash || res.hash,
-              certificate_owner: pkg.certificate_owner || res.certificate_owner,
-              original_filename: pkg.original_filename || pkg.document_name || res.original_filename
-            });
+              ...current,
+              timestamp: current?.timestamp || pkg.timestamp,
+              signed_by: current?.signed_by || pkg.signed_by,
+              algorithm: current?.algorithm_used || current?.algorithm || pkg.algorithm,
+              hash: current?.hash || pkg.hash,
+              certificate_owner: current?.certificate_owner || pkg.certificate_owner,
+              original_filename: current?.original_filename || pkg.original_filename || pkg.document_name
+            }));
           } else if (res.status === 'tampered') {
             this.verifySuccess.set(false);
-            this.verifyDetails.set(res);
-            this.verifyError.set(null);
           } else {
             this.verifySuccess.set(false);
-            this.verifyDetails.set(res);
             this.verifyError.set(res.message || 'Invalid signature.');
           }
         },
@@ -135,12 +134,8 @@ export class VerifyComponent {
           if (e?.error) {
             try {
               const text = typeof e.error === 'string' ? e.error : '';
-              if (text) {
-                const parsed = JSON.parse(text);
-                msg = parsed.message || msg;
-              } else if (e.error.message) {
-                msg = e.error.message;
-              }
+              const parsed = text ? JSON.parse(text) : e.error;
+              msg = parsed.message || msg;
             } catch {
               if (e.error.message) msg = e.error.message;
             }
@@ -159,7 +154,6 @@ export class VerifyComponent {
       return;
     }
 
-    // The document is stored as a base64 string inside the JSON
     const base64Data = pkg.document || pkg.signed_data || pkg.original_data;
     if (!base64Data) {
       this.verifyError.set('No original file data found in the signed package.');
@@ -167,7 +161,6 @@ export class VerifyComponent {
     }
 
     try {
-      // Decode base64 to raw binary string, then convert to ArrayBuffer
       const byteString = atob(base64Data);
       const ab = new ArrayBuffer(byteString.length);
       const ia = new Uint8Array(ab);
@@ -175,7 +168,6 @@ export class VerifyComponent {
         ia[i] = byteString.charCodeAt(i);
       }
       
-      // Create a blob and trigger browser download
       const blob = new Blob([ab]);
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
