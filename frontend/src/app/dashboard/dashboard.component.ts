@@ -132,8 +132,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboard();
   }
 
-  onVerifyFileSelected(file: File | null): void {
-    this.verification.verifyFile = file;
+  onVerifyFileSelected(files: FileList | null): void {
+  this.verification.verifyFile = files ? files[0] : null;
     this.verification.verifyError = null;
     this.verification.verifySuccess = false;
     this.verification.verifyDetails = null;

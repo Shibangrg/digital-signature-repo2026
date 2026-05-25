@@ -11,7 +11,6 @@ from .key_utils import ensure_user_profile
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)
-def create_profile_with_keys(sender, instance, created, **kwargs):
     """Auto-create auth token and user profile (with RSA keys) for every new user."""
     if created:
         Token.objects.get_or_create(user=instance)

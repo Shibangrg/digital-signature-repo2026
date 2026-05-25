@@ -112,7 +112,7 @@
       <div class="verify-card">
         <div class="verify-row">
           <label class="verify-label">Upload signed_document.json</label>
-          <input type="file" accept="application/json,.json" (change)="onVerifyFileSelected(($event.target as HTMLInputElement).files?.[0] ?? null)" />
+            <input type="file" accept="application/json,.json" #verifyFileInput (change)="onVerifyFileSelected(verifyFileInput.files)" />
         </div>
 
         <div class="verify-actions">

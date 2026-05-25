@@ -69,3 +69,39 @@
     </div>
   </div>
 </header>
+<!-- Certificate Modal -->
+<div class="modal-backdrop" *ngIf="certificateModalOpen()" (click)="closeCertificateModal()"></div>
+
+<div class="modal-card" *ngIf="certificateModalOpen()">
+  <div class="modal-header">
+    <h2>My Certificate</h2>
+    <button type="button" class="modal-close" (click)="closeCertificateModal()">✕</button>
+  </div>
+
+  <p class="modal-desc">Your public certificate used for signature verification.</p>
+
+  <div *ngIf="myCertificateLoading()">Loading certificate…</div>
+
+  <div *ngIf="!myCertificateLoading()">
+    <div class="algo-row">
+      <div class="algo-left">
+        <span class="algo-label">Signature Algorithm</span>
+        <span class="algo-value">{{ auth.signatureAlgorithm() }}</span>
+      </div>
+      <div class="algo-actions">
+        <button class="btn btn-secondary" (click)="setAlgorithm('RSA-SHA256')" [disabled]="algoSaving()">RSA-SHA256</button>
+        <button class="btn btn-secondary" (click)="setAlgorithm('ECDSA-P256-SHA256')" [disabled]="algoSaving()">ECDSA-P256-SHA256</button>
+      </div>
+    </div>
+
+    <p *ngIf="algoError()" style="color:red;font-size:0.85rem">{{ algoError() }}</p>
+
+    <textarea class="pem-display" readonly [value]="myCertificate() || 'No certificate found.'"></textarea>
+  </div>
+
+  <div class="modal-actions">
+    <button class="btn btn-secondary" (click)="closeCertificateModal()">Close</button>
+    <button class="btn btn-secondary" *ngIf="myCertificate()" (click)="downloadPem('certificate.pem', myCertificate()!)">⬇ Download PEM</button>
+    <button class="btn btn-secondary" *ngIf="myCertificate()" (click)="copyCertificate(myCertificate()!)">📋 Copy</button>
+  </div>
+</div>
