@@ -1,1 +1,68 @@
-<router-outlet />
+<div class="app-container">
+  <!-- Navigation Bar -->
+  <nav class="navbar">
+    <div class="navbar-brand">
+      <h1>
+        <i class="fas fa-pen-fancy"></i>
+        Digital Signature System
+      </h1>
+    </div>
+    
+    <button class="menu-toggle" (click)="toggleMenu()">
+      <i class="fas fa-bars"></i>
+    </button>
+
+    <ul class="nav-menu" [class.active]="menuOpen">
+      <li>
+        <a 
+          routerLink="/dashboard" 
+          routerLinkActive="active"
+          (click)="closeMenu()"
+          class="nav-link">
+          <i class="fas fa-chart-line"></i>
+          Dashboard
+        </a>
+      </li>
+      <li>
+        <a 
+          routerLink="/signing" 
+          routerLinkActive="active"
+          (click)="closeMenu()"
+          class="nav-link">
+          <i class="fas fa-pen-fancy"></i>
+          Sign Document
+        </a>
+      </li>
+      <li>
+        <a 
+          routerLink="/verifying" 
+          routerLinkActive="active"
+          (click)="closeMenu()"
+          class="nav-link">
+          <i class="fas fa-check-circle"></i>
+          Verify Signature
+        </a>
+      </li>
+      <li>
+        <a 
+          routerLink="/logs" 
+          routerLinkActive="active"
+          (click)="closeMenu()"
+          class="nav-link">
+          <i class="fas fa-list"></i>
+          Activity Logs
+        </a>
+      </li>
+    </ul>
+  </nav>
+
+  <!-- Main Content -->
+  <main class="main-content">
+    <router-outlet></router-outlet>
+  </main>
+
+  <!-- Footer -->
+  <footer class="footer">
+    <p>&copy; 2026 Digital Signature System. All rights reserved.</p>
+  </footer>
+</div>

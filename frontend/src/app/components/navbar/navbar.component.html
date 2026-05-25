@@ -74,21 +74,6 @@
     <button type="button" class="modal-close" (click)="closeCertificateModal()" aria-label="Close">✕</button>
   </div>
   <p class="modal-desc">Your self-signed X.509 certificate (PEM). Verification uses the certificate contained here.</p>
-  <div class="algo-row">
-    <div class="algo-left">
-      <div class="algo-label">Signing algorithm</div>
-      <div class="algo-value">{{ auth.signatureAlgorithm() }}</div>
-    </div>
-    <div class="algo-actions">
-      <button type="button" class="btn btn-secondary" (click)="setAlgorithm('RSA-SHA256')" [disabled]="algoSaving()">
-        Use RSA
-      </button>
-      <button type="button" class="btn btn-secondary" (click)="setAlgorithm('ECDSA-P256-SHA256')" [disabled]="algoSaving()">
-        Use ECDSA
-      </button>
-    </div>
-  </div>
-  <p class="modal-desc" *ngIf="algoError()">{{ algoError() }}</p>
   <textarea class="pem-display" rows="9" readonly [value]="myCertificate() || ''"></textarea>
   <div class="modal-actions">
     <button type="button" class="btn btn-secondary" *ngIf="myCertificate() as cert" (click)="copyCertificate(cert)">
