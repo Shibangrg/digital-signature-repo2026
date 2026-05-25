@@ -5,14 +5,9 @@ from rest_framework.authtoken.models import Token
 from .models import DocumentRecord, DocumentVersion
 
 from .key_utils import ensure_user_profile
-receiver(post_save, sender=DocumentRecord)
-def create_document_version(sender, instance, created, **kwargs):
-    if not created:  # Only for updates, not new files
-        DocumentVersion.objects.create(
-            document=instance,
-            content=instance.content,
-            # ... handle file paths if applicable
-        )
+# DocumentRecord versions are created explicitly in `views.sign_document()` via `_upsert_document_chain()`.
+# Keeping an additional DocumentRecord post_save signal that creates placeholder versions can
+# interfere with the signing/verification pipeline.
 
 
 @receiver(post_save, sender=settings.AUTH_USER_MODEL)

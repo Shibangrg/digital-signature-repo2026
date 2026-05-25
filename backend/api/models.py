@@ -98,10 +98,20 @@ class AuditLog(models.Model):
 
 
 class DocumentRecord(models.Model):
-    # The "current" state of the document
-    name = models.CharField(max_length=255)
-    content = models.TextField()  # Or a FileField if storing binary files
+    """Current stored representation of a document.
+
+    Note: other parts of the codebase (signing + verification endpoints) expect
+    a `doc_id` primary identifier.
+    """
+
+    # Public immutable identifier for the logical document.
+    doc_id = models.CharField(max_length=128, unique=True)
+
+    # Human-friendly metadata
+    name = models.CharField(max_length=255, blank=True, default="")
+    content = models.TextField(blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
+
 
     def save(self, *args, **kwargs):
         # Create a version before saving changes
@@ -115,9 +125,8 @@ class DocumentRecord(models.Model):
 
 
 class DocumentVersion(models.Model):
-    """
-    Immutable append-only version entry with hash chaining.
-    """
+    """Immutable append-only version entry with hash chaining."""
+
 
     record = models.ForeignKey(
         DocumentRecord,
@@ -146,11 +155,10 @@ class DocumentVersion(models.Model):
     def __str__(self):
         return f"{self.record.doc_id} v{self.version_no}"
     
-class DocumentVersion(models.Model):
-    document = models.ForeignKey(DocumentRecord, on_delete=models.CASCADE, related_name='versions')
-    content = models.TextField()
-    version_number = models.IntegerField()
-    created_at = models.DateTimeField(auto_now_add=True)
+# NOTE: A duplicate DocumentVersion model existed here from an earlier prototype.
+# It conflicts with the main DocumentVersion (hash-chain) model above.
+# It has been removed to keep Django models consistent.
+
 
 
 class SignedDocumentArtifact(models.Model):

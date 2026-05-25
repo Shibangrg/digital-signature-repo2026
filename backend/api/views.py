@@ -249,12 +249,15 @@ def _upsert_document_chain(
 ) -> tuple[DocumentRecord, DocumentVersion]:
     record, _ = DocumentRecord.objects.get_or_create(
         doc_id=doc_id,
-        defaults={"owner": user},
     )
-    if record.owner_id != user.id:
-        raise ValueError("Document ID belongs to another user.")
+
+    # Ensure PK exists before traversing related managers (versions).
+    # (get_or_create should do this, but keep it defensive for edge cases.)
+    if not record.pk:
+        record.refresh_from_db()
 
     last_version = record.versions.order_by("-version_no").first()
+
     version_no = 1 if not last_version else (last_version.version_no + 1)
     prev_chain_hash = "" if not last_version else last_version.chain_hash
     created_at = datetime.now(timezone.utc)

@@ -1,8 +1,11 @@
-import { CommonModule } from '@angular/common'; // Add this line
+import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
 import { interval, Subject, takeUntil } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
+
+import { NavbarComponent } from '../components/navbar/navbar.component';
 import { DashboardService } from '../services/dashboard.service';
+import { SignatureApiService, VerifyResult } from '../services/signature-api.service';
 
 export interface DashboardSummary {
   metrics: SystemMetrics;
@@ -43,10 +46,18 @@ export interface SystemHealth {
   checks: { [key: string]: string };
 }
 
+export interface DashboardVerificationState {
+  verifyFile: File | null;
+  verifyLoading: boolean;
+  verifySuccess: boolean;
+  verifyError: string | null;
+  verifyDetails: VerifyResult | null;
+}
+
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule], // Add this if you use directives like *ngIf
+  imports: [CommonModule, NavbarComponent],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.css',
 })
@@ -54,11 +65,22 @@ export class DashboardComponent implements OnInit, OnDestroy {
   dashboardData: DashboardSummary | null = null;
   isLoading = false;
   error: string | null = null;
-  
+
   private destroy$ = new Subject<void>();
   private refreshInterval = 30000; // 30 seconds
 
-  constructor(private dashboardService: DashboardService) {}
+  verification: DashboardVerificationState = {
+    verifyFile: null,
+    verifyLoading: false,
+    verifySuccess: false,
+    verifyError: null,
+    verifyDetails: null,
+  };
+
+  constructor(
+    private dashboardService: DashboardService,
+    private signatureApi: SignatureApiService
+  ) {}
 
   ngOnInit(): void {
     this.loadDashboard();
@@ -73,19 +95,20 @@ export class DashboardComponent implements OnInit, OnDestroy {
   private loadDashboard(): void {
     this.isLoading = true;
     this.error = null;
-    
-    this.dashboardService.getSummary()
+
+    this.dashboardService
+      .getSummary()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (data) => {
           this.dashboardData = data;
           this.isLoading = false;
         },
-        error: (error) => {
+        error: (err) => {
           this.error = 'Failed to load dashboard data';
           this.isLoading = false;
-          console.error('Dashboard load error:', error);
-        }
+          console.error('Dashboard load error:', err);
+        },
       });
   }
 
@@ -99,14 +122,51 @@ export class DashboardComponent implements OnInit, OnDestroy {
         next: (data) => {
           this.dashboardData = data;
         },
-        error: (error) => {
-          console.error('Auto-refresh error:', error);
-        }
+        error: (err) => {
+          console.error('Auto-refresh error:', err);
+        },
       });
   }
 
   refreshDashboard(): void {
     this.loadDashboard();
+  }
+
+  onVerifyFileSelected(file: File | null): void {
+    this.verification.verifyFile = file;
+    this.verification.verifyError = null;
+    this.verification.verifySuccess = false;
+    this.verification.verifyDetails = null;
+  }
+
+  verifyOnDashboard(): void {
+    if (!this.verification.verifyFile) {
+      this.verification.verifyError = 'Please upload a signed_document.json file.';
+      return;
+    }
+
+    this.verification.verifyLoading = true;
+    this.verification.verifyError = null;
+    this.verification.verifySuccess = false;
+    this.verification.verifyDetails = null;
+
+    this.signatureApi
+      .verifyDocument(this.verification.verifyFile)
+      .pipe(takeUntil(this.destroy$))
+      .subscribe({
+        next: (res) => {
+          this.verification.verifyDetails = res;
+          this.verification.verifySuccess = res.status === 'valid';
+          this.verification.verifyError =
+            res.status === 'valid' ? null : res.message || 'Invalid signature.';
+          this.verification.verifyLoading = false;
+        },
+        error: (err) => {
+          this.verification.verifyLoading = false;
+          this.verification.verifySuccess = false;
+          this.verification.verifyError = err?.error?.message || 'Verification request failed.';
+        },
+      });
   }
 
   getHealthColor(status: string): string {
@@ -117,3 +177,4 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return status === 'connected' || status === 'operational' ? 'check-circle' : 'exclamation-circle';
   }
 }
+

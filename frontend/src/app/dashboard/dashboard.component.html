@@ -1,3 +1,4 @@
+<app-navbar></app-navbar>
 <div class="dashboard-container">
   <div class="dashboard-header">
     <h1>Dashboard</h1>
@@ -105,9 +106,55 @@
       </div>
     </div>
 
+    <!-- Verify Document (Dashboard) -->
+    <div class="verify-section">
+      <h2>Verify Document</h2>
+      <div class="verify-card">
+        <div class="verify-row">
+          <label class="verify-label">Upload signed_document.json</label>
+          <input type="file" accept="application/json,.json" (change)="onVerifyFileSelected(($event.target as HTMLInputElement).files?.[0] ?? null)" />
+        </div>
+
+        <div class="verify-actions">
+          <button class="btn btn-primary" (click)="verifyOnDashboard()" [disabled]="verification.verifyLoading || !verification.verifyFile">
+            <span *ngIf="verification.verifyLoading" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
+            Verify
+          </button>
+        </div>
+
+        <div *ngIf="verification.verifyError" class="alert alert-danger" role="alert">
+          {{ verification.verifyError }}
+        </div>
+
+        <div *ngIf="verification.verifyDetails" class="verify-result">
+          <div class="verify-status" [ngClass]="verification.verifySuccess ? 'verify-success' : (verification.verifyDetails?.status === 'tampered' ? 'verify-tampered' : 'verify-failed')">
+            {{ verification.verifyDetails.status | uppercase }}
+          </div>
+
+          <div class="verify-grid">
+            <div class="verify-field"><span class="k">Message</span><span class="v">{{ verification.verifyDetails.message || '-' }}</span></div>
+            <div class="verify-field"><span class="k">Algorithm</span><span class="v">{{ verification.verifyDetails.algorithm_used || verification.verifyDetails.algorithm || '-' }}</span></div>
+            <div class="verify-field"><span class="k">Signed By</span><span class="v">{{ verification.verifyDetails.signed_by || verification.verifyDetails.certificate_owner || '-' }}</span></div>
+            <div class="verify-field"><span class="k">Document ID</span><span class="v">{{ verification.verifyDetails.document_id || '-' }}</span></div>
+            <div class="verify-field full"><span class="k">Note</span><span class="v">{{ verification.verifyDetails.note || '-' }}</span></div>
+          </div>
+
+          <div *ngIf="verification.verifyDetails.tamper_report" class="tamper-report">
+            <h3>Tamper Localization</h3>
+            <ul>
+              <li><b>Added:</b> {{ verification.verifyDetails.tamper_report.added?.join(', ') || '-' }}</li>
+              <li><b>Deleted:</b> {{ verification.verifyDetails.tamper_report.deleted?.join(', ') || '-' }}</li>
+              <li><b>Modified:</b> {{ verification.verifyDetails.tamper_report.modified?.length ? (verification.verifyDetails.tamper_report.modified | json) : '-' }}</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Recent Activities -->
     <div class="activities-section">
       <h2>Recent Activities</h2>
+
       <div class="activities-list">
         <div *ngFor="let activity of dashboardData.recent_activities" class="activity-item">
           <div class="activity-type">

@@ -234,6 +234,121 @@
   font-size: 0.75rem;
 }
 
+/* Verify Section */
+.verify-section {
+  background: white;
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  margin-bottom: 30px;
+}
+
+.verify-section h2 {
+  color: #333;
+  margin-bottom: 20px;
+  font-size: 1.5rem;
+}
+
+.verify-card {
+  background: #f8f9fa;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 20px;
+}
+
+.verify-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.verify-label {
+  font-weight: 700;
+  color: #555;
+}
+
+.verify-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.verify-result {
+  margin-top: 16px;
+}
+
+.verify-status {
+  display: inline-block;
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-weight: 800;
+  margin-bottom: 14px;
+}
+
+.verify-success {
+  background: #d4edda;
+  color: #155724;
+}
+
+.verify-failed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+.verify-tampered {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.verify-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.verify-field {
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.verify-field.full {
+  grid-column: 1 / -1;
+}
+
+.verify-field .k {
+  display: block;
+  color: #666;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+
+.verify-field .v {
+  color: #333;
+  word-break: break-word;
+}
+
+.tamper-report {
+  margin-top: 18px;
+  background: white;
+  border: 1px solid #e9ecef;
+  border-radius: 10px;
+  padding: 16px;
+}
+
+.tamper-report h3 {
+  margin: 0 0 10px 0;
+  color: #333;
+}
+
+.tamper-report ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
 /* Activities Section */
 .activities-section {
   background: white;
