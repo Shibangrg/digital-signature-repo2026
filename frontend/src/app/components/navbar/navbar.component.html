@@ -9,7 +9,11 @@
     </div>
 
     <nav class="nav-links" id="nav-links">
-      <a routerLink="/sign" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" id="nav-sign">
+      <a routerLink="/dashboard" routerLinkActive="active" [routerLinkActiveOptions]="{ exact: true }" id="nav-dashboard">
+        <span class="nav-icon">📊</span>
+        Dashboard
+      </a>
+      <a routerLink="/sign" routerLinkActive="active" id="nav-sign">
         <span class="nav-icon">✍️</span>
         Sign
       </a>
@@ -65,23 +69,3 @@
     </div>
   </div>
 </header>
-
-<!-- Certificate Modal -->
-<div class="modal-backdrop" *ngIf="certificateModalOpen()" (click)="closeCertificateModal()"></div>
-<section class="modal-card" *ngIf="certificateModalOpen()" id="certificate-modal">
-  <div class="modal-header">
-    <h2>📄 Certificate</h2>
-    <button type="button" class="modal-close" (click)="closeCertificateModal()" aria-label="Close">✕</button>
-  </div>
-  <p class="modal-desc">Your self-signed X.509 certificate (PEM). Verification uses the certificate contained here.</p>
-  <textarea class="pem-display" rows="9" readonly [value]="myCertificate() || ''"></textarea>
-  <div class="modal-actions">
-    <button type="button" class="btn btn-secondary" *ngIf="myCertificate() as cert" (click)="copyCertificate(cert)">
-      📋 Copy
-    </button>
-    <button type="button" class="btn btn-secondary" *ngIf="myCertificate() as cert" (click)="downloadPem('certificate.pem', cert)">
-      ⬇ Download .pem
-    </button>
-    <button type="button" class="btn btn-ghost" (click)="closeCertificateModal()">Close</button>
-  </div>
-</section>
