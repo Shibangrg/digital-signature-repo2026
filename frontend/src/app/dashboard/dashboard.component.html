@@ -19,7 +19,31 @@
   </div>
 
   <div *ngIf="dashboardData" class="dashboard-content">
-    <!-- Metrics Cards -->
+    
+    <div class="pinned-actions-section">
+      <div class="action-card sign-action" routerLink="/sign">
+        <div class="action-icon"><i class="fas fa-file-signature"></i></div>
+        <div class="action-text">
+          <h3>Sign Document</h3>
+          <p>Digitally sign a new file</p>
+        </div>
+      </div>
+      <div class="action-card verify-action" (click)="scrollToVerify()">
+        <div class="action-icon"><i class="fas fa-check-circle"></i></div>
+        <div class="action-text">
+          <h3>Verify Document</h3>
+          <p>Check signature validity</p>
+        </div>
+      </div>
+      <div class="action-card logs-action" routerLink="/logs">
+        <div class="action-icon"><i class="fas fa-history"></i></div>
+        <div class="action-text">
+          <h3>Audit Logs</h3>
+          <p>View system activity</p>
+        </div>
+      </div>
+    </div>
+
     <div class="metrics-section">
       <div class="metrics-grid">
         <div class="metric-card">
@@ -62,63 +86,107 @@
       </div>
     </div>
 
-    <!-- User Statistics -->
-    <div class="user-stats-section">
-      <h2>User Statistics</h2>
-      <div class="stats-grid">
-        <div class="stat-item">
-          <label>Total Users</label>
-          <div class="stat-value">{{ dashboardData.user_stats.total_users }}</div>
-        </div>
-        <div class="stat-item">
-          <label>Active Users</label>
-          <div class="stat-value">{{ dashboardData.user_stats.active_users }}</div>
-        </div>
-        <div class="stat-item">
-          <label>Inactive Users</label>
-          <div class="stat-value">{{ dashboardData.user_stats.inactive_users }}</div>
-        </div>
+    <div class="documents-section">
+      <h2>Recent Uploaded Documents</h2>
+      <div class="table-responsive">
+        <table class="table custom-table">
+          <thead>
+            <tr>
+              <th>Document ID</th>
+              <th>Document Name</th>
+              <th>Size</th>
+              <th>Uploaded By</th>
+              <th>Date</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let doc of dashboardData.recent_documents">
+              <td class="text-muted">{{ doc.id }}</td>
+              <td>
+                <div class="doc-name">
+                  <i class="fas fa-file-pdf"></i> {{ doc.filename }}
+                </div>
+              </td>
+              <td>{{ doc.size }}</td>
+              <td>{{ doc.uploaded_by }}</td>
+              <td>{{ doc.uploaded_at | date: 'MMM d, y, h:mm a' }}</td>
+              <td>
+                <span class="badge" [ngClass]="'badge-' + doc.status">
+                  {{ doc.status | uppercase }}
+                </span>
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-primary" title="View Details">
+                  <i class="fas fa-eye"></i>
+                </button>
+              </td>
+            </tr>
+            <tr *ngIf="!dashboardData.recent_documents || dashboardData.recent_documents.length === 0">
+              <td colspan="7" class="text-center text-muted">No documents have been uploaded yet.</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
 
-        <div *ngFor="let role of dashboardData.user_stats.by_role | keyvalue" class="stat-item">
-          <label>{{ role.key | titlecase }}</label>
-          <div class="stat-value">{{ role.value }}</div>
+    <div class="stats-health-grid">
+      <div class="user-stats-section">
+        <h2>User Statistics</h2>
+        <div class="stats-grid">
+          <div class="stat-item">
+            <label>Total Users</label>
+            <div class="stat-value">{{ dashboardData.user_stats.total_users }}</div>
+          </div>
+          <div class="stat-item">
+            <label>Active Users</label>
+            <div class="stat-value">{{ dashboardData.user_stats.active_users }}</div>
+          </div>
+          <div class="stat-item">
+            <label>Inactive Users</label>
+            <div class="stat-value">{{ dashboardData.user_stats.inactive_users }}</div>
+          </div>
+
+          <div *ngFor="let role of dashboardData.user_stats.by_role | keyvalue" class="stat-item">
+            <label>{{ role.key | titlecase }}</label>
+            <div class="stat-value">{{ role.value }}</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="system-health-section">
+        <h2>System Health</h2>
+        <div class="health-status" [ngClass]="'status-' + dashboardData.system_health.status">
+          <h3>
+            <i [class]="'fas fa-' + getHealthIcon(dashboardData.system_health.status)"></i>
+            {{ dashboardData.system_health.status | uppercase }}
+          </h3>
+        </div>
+        <div class="health-checks">
+          <div *ngFor="let check of dashboardData.system_health.checks | keyvalue" class="health-check-item">
+            <span class="check-name">{{ check.key | titlecase }}</span>
+            <span class="check-status" [ngClass]="'status-' + getHealthColor(check.value)">
+              <i class="fas fa-circle"></i>
+              {{ check.value }}
+            </span>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- System Health -->
-    <div class="system-health-section">
-      <h2>System Health</h2>
-      <div class="health-status" [ngClass]="'status-' + dashboardData.system_health.status">
-        <h3>
-          <i [class]="'fas fa-' + getHealthIcon(dashboardData.system_health.status)"></i>
-          {{ dashboardData.system_health.status | uppercase }}
-        </h3>
-      </div>
-      <div class="health-checks">
-        <div *ngFor="let check of dashboardData.system_health.checks | keyvalue" class="health-check-item">
-          <span class="check-name">{{ check.key | titlecase }}</span>
-          <span class="check-status" [ngClass]="'status-' + getHealthColor(check.value)">
-            <i class="fas fa-circle"></i>
-            {{ check.value }}
-          </span>
-        </div>
-      </div>
-    </div>
-
-    <!-- Verify Document (Dashboard) -->
-    <div class="verify-section">
+    <div class="verify-section" id="verify-section">
       <h2>Verify Document</h2>
       <div class="verify-card">
         <div class="verify-row">
           <label class="verify-label">Upload signed_document.json</label>
-            <input type="file" accept="application/json,.json" #verifyFileInput (change)="onVerifyFileSelected(verifyFileInput.files)" />
+          <input type="file" accept="application/json,.json" #verifyFileInput (change)="onVerifyFileSelected(verifyFileInput.files)" />
         </div>
 
         <div class="verify-actions">
           <button class="btn btn-primary" (click)="verifyOnDashboard()" [disabled]="verification.verifyLoading || !verification.verifyFile">
             <span *ngIf="verification.verifyLoading" class="spinner-border spinner-border-sm" aria-hidden="true"></span>
-            Verify
+            Verify File Signature
           </button>
         </div>
 
@@ -151,7 +219,6 @@
       </div>
     </div>
 
-    <!-- Recent Activities -->
     <div class="activities-section">
       <h2>Recent Activities</h2>
 

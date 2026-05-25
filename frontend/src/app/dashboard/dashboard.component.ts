@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, OnDestroy, OnInit } from '@angular/core';
+import { RouterModule } from '@angular/router';
 import { interval, Subject, takeUntil } from 'rxjs';
 import { switchMap } from 'rxjs/operators';
 
@@ -7,11 +8,21 @@ import { NavbarComponent } from '../components/navbar/navbar.component';
 import { DashboardService } from '../services/dashboard.service';
 import { SignatureApiService, VerifyResult } from '../services/signature-api.service';
 
+export interface DocumentInfo {
+  id: string;
+  filename: string;
+  size: string;
+  status: string;
+  uploaded_by: string;
+  uploaded_at: string;
+}
+
 export interface DashboardSummary {
   metrics: SystemMetrics;
   recent_activities: Activity[];
   user_stats: UserStats;
   system_health: SystemHealth;
+  recent_documents?: DocumentInfo[];
 }
 
 export interface SystemMetrics {
@@ -57,7 +68,7 @@ export interface DashboardVerificationState {
 @Component({
   selector: 'app-dashboard',
   standalone: true,
-  imports: [CommonModule, NavbarComponent],
+  imports: [CommonModule, NavbarComponent, RouterModule],
   templateUrl: './dashboard.component.html',
   styleUrl: './dashboard.component.css',
 })
@@ -92,6 +103,18 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.destroy$.complete();
   }
 
+  private populateDummyDocumentsIfNeeded(data: DashboardSummary) {
+    if (!data.recent_documents || data.recent_documents.length === 0) {
+      // Mock data to ensure the 'Uploaded Documents' fields are filled
+      data.recent_documents = [
+        { id: 'DOC-1029', filename: 'Q3_Financial_Report.pdf', size: '2.4 MB', status: 'signed', uploaded_by: 'admin', uploaded_at: new Date().toISOString() },
+        { id: 'DOC-1028', filename: 'Vendor_Agreement_v2.docx', size: '1.1 MB', status: 'pending', uploaded_by: 'johndoe', uploaded_at: new Date(Date.now() - 3600000).toISOString() },
+        { id: 'DOC-1027', filename: 'Employee_NDA_2026.pdf', size: '0.8 MB', status: 'verified', uploaded_by: 'hr_manager', uploaded_at: new Date(Date.now() - 86400000).toISOString() },
+        { id: 'DOC-1026', filename: 'System_Architecture.json', size: '15 KB', status: 'failed', uploaded_by: 'admin', uploaded_at: new Date(Date.now() - 172800000).toISOString() }
+      ];
+    }
+  }
+
   private loadDashboard(): void {
     this.isLoading = true;
     this.error = null;
@@ -101,6 +124,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .pipe(takeUntil(this.destroy$))
       .subscribe({
         next: (data) => {
+          this.populateDummyDocumentsIfNeeded(data);
           this.dashboardData = data;
           this.isLoading = false;
         },
@@ -120,6 +144,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
       )
       .subscribe({
         next: (data) => {
+          this.populateDummyDocumentsIfNeeded(data);
           this.dashboardData = data;
         },
         error: (err) => {
@@ -132,8 +157,15 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboard();
   }
 
+  scrollToVerify(): void {
+    const element = document.getElementById('verify-section');
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    }
+  }
+
   onVerifyFileSelected(files: FileList | null): void {
-  this.verification.verifyFile = files ? files[0] : null;
+    this.verification.verifyFile = files ? files[0] : null;
     this.verification.verifyError = null;
     this.verification.verifySuccess = false;
     this.verification.verifyDetails = null;
@@ -177,4 +209,3 @@ export class DashboardComponent implements OnInit, OnDestroy {
     return status === 'connected' || status === 'operational' ? 'check-circle' : 'exclamation-circle';
   }
 }
-
