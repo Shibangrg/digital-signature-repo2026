@@ -2,9 +2,9 @@ import { Routes } from '@angular/router';
 import { authGuard } from './guards/auth.guard';
 import { guestGuard } from './guards/guest.guard';
 import { LoginComponent } from './pages/login/login.component';
+import { LogsComponent } from './pages/logs/logs.component';
 import { SignComponent } from './pages/sign/sign.component';
 import { VerifyComponent } from './pages/verify/verify.component';
-import { LogsComponent } from './pages/logs/logs.component';
 
 export const routes: Routes = [
   { path: 'login', component: LoginComponent, canActivate: [guestGuard] },
