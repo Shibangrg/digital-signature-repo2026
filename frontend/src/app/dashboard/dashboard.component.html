@@ -1,0 +1,126 @@
+<div class="dashboard-container">
+  <div class="dashboard-header">
+    <h1>Dashboard</h1>
+    <button class="btn btn-primary" (click)="refreshDashboard()" [disabled]="isLoading">
+      <i class="fas fa-sync-alt" [class.spinning]="isLoading"></i>
+      Refresh
+    </button>
+  </div>
+
+  <div *ngIf="error" class="alert alert-danger" role="alert">
+    {{ error }}
+  </div>
+
+  <div *ngIf="isLoading && !dashboardData" class="text-center py-5">
+    <div class="spinner-border" role="status">
+      <span class="visually-hidden">Loading...</span>
+    </div>
+  </div>
+
+  <div *ngIf="dashboardData" class="dashboard-content">
+    <!-- Metrics Cards -->
+    <div class="metrics-section">
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <div class="metric-header">
+            <h3>Total Users</h3>
+            <i class="fas fa-users"></i>
+          </div>
+          <div class="metric-value">{{ dashboardData.metrics.total_users }}</div>
+          <div class="metric-subtext">{{ dashboardData.metrics.active_users }} active</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <h3>Documents</h3>
+            <i class="fas fa-file-alt"></i>
+          </div>
+          <div class="metric-value">{{ dashboardData.metrics.total_documents }}</div>
+          <div class="metric-subtext">{{ dashboardData.metrics.documents_pending }} pending</div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <h3>Signatures</h3>
+            <i class="fas fa-pen-fancy"></i>
+          </div>
+          <div class="metric-value">{{ dashboardData.metrics.total_signatures }}</div>
+          <div class="metric-subtext">
+            Avg: {{ dashboardData.metrics.avg_signature_time_seconds | number: '1.0-0' }}s
+          </div>
+        </div>
+
+        <div class="metric-card">
+          <div class="metric-header">
+            <h3>Uptime</h3>
+            <i class="fas fa-server"></i>
+          </div>
+          <div class="metric-value">{{ dashboardData.metrics.system_uptime_hours | number: '1.1-1' }}h</div>
+          <div class="metric-subtext">System operational</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- User Statistics -->
+    <div class="user-stats-section">
+      <h2>User Statistics</h2>
+      <div class="stats-grid">
+        <div class="stat-item">
+          <label>Total Users</label>
+          <div class="stat-value">{{ dashboardData.user_stats.total_users }}</div>
+        </div>
+        <div class="stat-item">
+          <label>Active Users</label>
+          <div class="stat-value">{{ dashboardData.user_stats.active_users }}</div>
+        </div>
+        <div class="stat-item">
+          <label>Inactive Users</label>
+          <div class="stat-value">{{ dashboardData.user_stats.inactive_users }}</div>
+        </div>
+
+        <div *ngFor="let role of dashboardData.user_stats.by_role | keyvalue" class="stat-item">
+          <label>{{ role.key | titlecase }}</label>
+          <div class="stat-value">{{ role.value }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System Health -->
+    <div class="system-health-section">
+      <h2>System Health</h2>
+      <div class="health-status" [ngClass]="'status-' + dashboardData.system_health.status">
+        <h3>
+          <i [class]="'fas fa-' + getHealthIcon(dashboardData.system_health.status)"></i>
+          {{ dashboardData.system_health.status | uppercase }}
+        </h3>
+      </div>
+      <div class="health-checks">
+        <div *ngFor="let check of dashboardData.system_health.checks | keyvalue" class="health-check-item">
+          <span class="check-name">{{ check.key | titlecase }}</span>
+          <span class="check-status" [ngClass]="'status-' + getHealthColor(check.value)">
+            <i class="fas fa-circle"></i>
+            {{ check.value }}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent Activities -->
+    <div class="activities-section">
+      <h2>Recent Activities</h2>
+      <div class="activities-list">
+        <div *ngFor="let activity of dashboardData.recent_activities" class="activity-item">
+          <div class="activity-type">
+            <span class="badge" [ngClass]="'badge-' + activity.activity_type">
+              {{ activity.activity_type | uppercase }}
+            </span>
+          </div>
+          <div class="activity-details">
+            <p class="activity-description">{{ activity.description }}</p>
+            <small class="activity-timestamp">{{ activity.timestamp | date: 'short' }}</small>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
