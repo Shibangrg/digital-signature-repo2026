@@ -98,33 +98,18 @@ class AuditLog(models.Model):
 
 
 class DocumentRecord(models.Model):
-    """Current stored representation of a document.
-
-    Note: other parts of the codebase (signing + verification endpoints) expect
-    a `doc_id` primary identifier.
-    """
-
-    # Public immutable identifier for the logical document.
+    """Current stored representation of a document."""
     doc_id = models.CharField(max_length=128, unique=True)
-
-    # Human-friendly metadata
     name = models.CharField(max_length=255, blank=True, default="")
     content = models.TextField(blank=True, default="")
     updated_at = models.DateTimeField(auto_now=True)
 
-
     def save(self, *args, **kwargs):
-        # Document versions are created explicitly in backend/api/views.py
-        # via _upsert_document_chain() to keep hash-chain fields consistent.
-        # This model-level save hook is intentionally a no-op.
         super().save(*args, **kwargs)
-
 
 
 class DocumentVersion(models.Model):
     """Immutable append-only version entry with hash chaining."""
-
-
     record = models.ForeignKey(
         DocumentRecord,
         on_delete=models.CASCADE,
@@ -151,18 +136,10 @@ class DocumentVersion(models.Model):
 
     def __str__(self):
         return f"{self.record.doc_id} v{self.version_no}"
-    
-# NOTE: A duplicate DocumentVersion model existed here from an earlier prototype.
-# It conflicts with the main DocumentVersion (hash-chain) model above.
-# It has been removed to keep Django models consistent.
-
 
 
 class SignedDocumentArtifact(models.Model):
-    """
-    Stored signed artifact for trusted backend-side verification.
-    """
-
+    """Stored signed artifact for trusted backend-side verification."""
     version = models.OneToOneField(
         DocumentVersion,
         on_delete=models.CASCADE,
@@ -179,3 +156,29 @@ class SignedDocumentArtifact(models.Model):
 
     def __str__(self):
         return f"artifact:{self.version.record.doc_id}:v{self.version.version_no}"
+
+
+class PendingDocument(models.Model):
+    """Stores documents uploaded by users waiting for admin signature."""
+    class Status(models.TextChoices):
+        PENDING = "pending", "Pending"
+        SIGNED = "signed", "Signed"
+        REJECTED = "rejected", "Rejected"
+
+    uploader = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name="pending_docs",
+    )
+    filename = models.CharField(max_length=255, blank=True, default="Untitled")
+    file_bytes = models.BinaryField(null=True, blank=True)
+    text_data = models.TextField(blank=True, default="")
+    size_bytes = models.PositiveIntegerField(default=0)
+    status = models.CharField(max_length=16, choices=Status.choices, default=Status.PENDING)
+    uploaded_at = models.DateTimeField(default=timezone.now)
+
+    class Meta:
+        ordering = ["-uploaded_at"]
+
+    def __str__(self):
+        return f"Pending: {self.filename} by {self.uploader.username}"

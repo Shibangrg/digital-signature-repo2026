@@ -21,13 +21,22 @@
   <div *ngIf="dashboardData" class="dashboard-content">
     
     <div class="pinned-actions-section">
-      <div class="action-card sign-action" routerLink="/sign">
+      <div *ngIf="currentUserRole === 'admin'" class="action-card sign-action" routerLink="/sign">
         <div class="action-icon"><i class="fas fa-file-signature"></i></div>
         <div class="action-text">
           <h3>Sign Document</h3>
           <p>Digitally sign a new file</p>
         </div>
       </div>
+      
+      <div *ngIf="currentUserRole !== 'admin'" class="action-card sign-action" routerLink="/sign">
+        <div class="action-icon"><i class="fas fa-upload"></i></div>
+        <div class="action-text">
+          <h3>Upload Document</h3>
+          <p>Submit a file to the server</p>
+        </div>
+      </div>
+
       <div class="action-card verify-action" (click)="scrollToVerify()">
         <div class="action-icon"><i class="fas fa-check-circle"></i></div>
         <div class="action-text">
@@ -35,6 +44,7 @@
           <p>Check signature validity</p>
         </div>
       </div>
+      
       <div class="action-card logs-action" routerLink="/logs">
         <div class="action-icon"><i class="fas fa-history"></i></div>
         <div class="action-text">
@@ -114,13 +124,36 @@
               <td>{{ doc.uploaded_at | date: 'MMM d, y, h:mm a' }}</td>
               <td>
                 <span class="badge" [ngClass]="'badge-' + doc.status">
+                  <i *ngIf="doc.status === 'signing...'" class="fas fa-spinner fa-spin me-1"></i>
                   {{ doc.status | uppercase }}
                 </span>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline-primary" title="View Details">
-                  <i class="fas fa-eye"></i>
-                </button>
+                <div class="d-flex gap-2 align-items-center">
+                  <button class="btn btn-sm btn-outline-primary" title="View Details">
+                    <i class="fas fa-eye"></i>
+                  </button>
+                  
+                  <button *ngIf="currentUserRole === 'admin' && (doc.status === 'pending' || doc.status === 'PENDING')" 
+                          class="btn btn-sm btn-outline-success" 
+                          title="Sign Document Now" 
+                          (click)="adminSignDocument(doc)">
+                    <i class="fas fa-pen"></i> Sign
+                  </button>
+
+                  <div class="dropdown-wrapper" *ngIf="doc.status === 'signed' || doc.status === 'SIGNED'">
+                    <button class="btn btn-primary more-actions-btn dropdown-trigger" title="More Actions">
+                      <i class="fas fa-ellipsis-v fa-lg"></i>
+                    </button>
+                    
+                    <div class="blue-dropbox">
+                      <a (click)="downloadSignedDocument(doc)">
+                        <i class="fas fa-file-download"></i> Download Signed Doc
+                      </a>
+                    </div>
+                  </div>
+
+                </div>
               </td>
             </tr>
             <tr *ngIf="!dashboardData.recent_documents || dashboardData.recent_documents.length === 0">
@@ -195,7 +228,7 @@
         </div>
 
         <div *ngIf="verification.verifyDetails" class="verify-result">
-          <div class="verify-status" [ngClass]="verification.verifySuccess ? 'verify-success' : (verification.verifyDetails?.status === 'tampered' ? 'verify-tampered' : 'verify-failed')">
+          <div class="verify-status" [ngClass]="verification.verifySuccess ? 'verify-success' : (verification.verifyDetails.status === 'tampered' ? 'verify-tampered' : 'verify-failed')">
             {{ verification.verifyDetails.status | uppercase }}
           </div>
 
@@ -210,9 +243,9 @@
           <div *ngIf="verification.verifyDetails.tamper_report" class="tamper-report">
             <h3>Tamper Localization</h3>
             <ul>
-              <li><b>Added:</b> {{ verification.verifyDetails.tamper_report.added?.join(', ') || '-' }}</li>
-              <li><b>Deleted:</b> {{ verification.verifyDetails.tamper_report.deleted?.join(', ') || '-' }}</li>
-              <li><b>Modified:</b> {{ verification.verifyDetails.tamper_report.modified?.length ? (verification.verifyDetails.tamper_report.modified | json) : '-' }}</li>
+              <li><b>Added:</b> {{ verification.verifyDetails.tamper_report.added.join(', ') || '-' }}</li>
+              <li><b>Deleted:</b> {{ verification.verifyDetails.tamper_report.deleted.join(', ') || '-' }}</li>
+              <li><b>Modified:</b> {{ verification.verifyDetails.tamper_report.modified.length ? (verification.verifyDetails.tamper_report.modified | json) : '-' }}</li>
             </ul>
           </div>
         </div>

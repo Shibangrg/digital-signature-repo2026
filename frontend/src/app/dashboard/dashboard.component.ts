@@ -76,9 +76,10 @@ export class DashboardComponent implements OnInit, OnDestroy {
   dashboardData: DashboardSummary | null = null;
   isLoading = false;
   error: string | null = null;
+  currentUserRole: string = 'user'; 
 
   private destroy$ = new Subject<void>();
-  private refreshInterval = 30000; // 30 seconds
+  private refreshInterval = 30000; 
 
   verification: DashboardVerificationState = {
     verifyFile: null,
@@ -94,6 +95,7 @@ export class DashboardComponent implements OnInit, OnDestroy {
   ) {}
 
   ngOnInit(): void {
+    this.currentUserRole = (localStorage.getItem('ds_auth_role') || 'user').toLowerCase();
     this.loadDashboard();
     this.setupAutoRefresh();
   }
@@ -105,7 +107,6 @@ export class DashboardComponent implements OnInit, OnDestroy {
 
   private populateDummyDocumentsIfNeeded(data: DashboardSummary) {
     if (!data.recent_documents || data.recent_documents.length === 0) {
-      // Mock data to ensure the 'Uploaded Documents' fields are filled
       data.recent_documents = [
         { id: 'DOC-1029', filename: 'Q3_Financial_Report.pdf', size: '2.4 MB', status: 'signed', uploaded_by: 'admin', uploaded_at: new Date().toISOString() },
         { id: 'DOC-1028', filename: 'Vendor_Agreement_v2.docx', size: '1.1 MB', status: 'pending', uploaded_by: 'johndoe', uploaded_at: new Date(Date.now() - 3600000).toISOString() },
@@ -123,7 +124,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
       .getSummary()
       .pipe(takeUntil(this.destroy$))
       .subscribe({
-        next: (data) => {
+        next: (res: any) => {
+          const data = res.data ? res.data : res;
           this.populateDummyDocumentsIfNeeded(data);
           this.dashboardData = data;
           this.isLoading = false;
@@ -143,7 +145,8 @@ export class DashboardComponent implements OnInit, OnDestroy {
         takeUntil(this.destroy$)
       )
       .subscribe({
-        next: (data) => {
+        next: (res: any) => {
+          const data = res.data ? res.data : res;
           this.populateDummyDocumentsIfNeeded(data);
           this.dashboardData = data;
         },
@@ -157,6 +160,73 @@ export class DashboardComponent implements OnInit, OnDestroy {
     this.loadDashboard();
   }
 
+  adminSignDocument(doc: DocumentInfo): void {
+    if (this.currentUserRole !== 'admin') return;
+
+    doc.status = 'signing...';
+    
+    const token = localStorage.getItem('ds_auth_token'); 
+    
+    fetch(`http://127.0.0.1:8000/api/approve-pending-document/${doc.id}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${token}`,
+        'Content-Type': 'application/json'
+      }
+    })
+    .then(res => res.json())
+    .then(data => {
+      if (data.status === 'success') {
+        doc.status = 'signed'; 
+        if (this.dashboardData) {
+          if (this.dashboardData.metrics.documents_pending > 0) {
+            this.dashboardData.metrics.documents_pending -= 1;
+          }
+          this.dashboardData.metrics.total_signatures += 1;
+        }
+      } else {
+        doc.status = 'pending'; 
+        alert(data.detail || 'Failed to sign document');
+      }
+    })
+    .catch(err => {
+      doc.status = 'pending';
+      console.error(err);
+    });
+  }
+
+  /* ─────────────────────────────────────────────
+   * Download Signed Document from Dropdown
+   * ───────────────────────────────────────────── */
+  downloadSignedDocument(doc: DocumentInfo): void {
+    const token = localStorage.getItem('ds_auth_token'); 
+    
+    fetch(`http://127.0.0.1:8000/api/download-pending-document/${doc.id}`, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Token ${token}`
+      }
+    })
+    .then(res => {
+      if (!res.ok) throw new Error('Download failed');
+      return res.blob();
+    })
+    .then(blob => {
+      // Create a blob URL and trigger the browser's download prompt
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `signed_${doc.filename}`; 
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    })
+    .catch(err => {
+      console.error('Download error:', err);
+      alert('Could not download the document.');
+    });
+  }
   scrollToVerify(): void {
     const element = document.getElementById('verify-section');
     if (element) {

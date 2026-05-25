@@ -47,6 +47,7 @@ from .models import (
     DocumentVersion,
     SignatureLog,
     SignedDocumentArtifact,
+    PendingDocument, 
 )
 from .serializers import (
     AuditLogSerializer,
@@ -1638,3 +1639,82 @@ def export_signed(request):
     )
     response["Content-Disposition"] = f'attachment; filename="signature_{log_id}.xlsx"'
     return response
+@api_view(["POST"])
+@parser_classes([MultiPartParser, FormParser, JSONParser])
+@permission_classes([IsAuthenticated])
+def upload_pending_document(request):
+    """Endpoint for regular users to upload documents for admin review."""
+    file_obj = request.FILES.get("file")
+    text_data = request.data.get("data", "")
+    
+    if not file_obj and not text_data:
+        return Response({"detail": "File or text data is required."}, status=400)
+        
+    filename = "Untitled"
+    size_bytes = 0
+    file_bytes = None
+    
+    if file_obj:
+        filename = file_obj.name
+        file_bytes = file_obj.read()
+        size_bytes = len(file_bytes)
+    elif text_data:
+        filename = "text_document.txt"
+        file_bytes = str(text_data).encode('utf-8')
+        size_bytes = len(file_bytes)
+        
+    PendingDocument.objects.create(
+        uploader=request.user,
+        filename=filename,
+        file_bytes=file_bytes,
+        text_data=str(text_data),
+        size_bytes=size_bytes,
+        status=PendingDocument.Status.PENDING
+    )
+    return Response({"status": "success", "message": "Document uploaded successfully."})
+
+@api_view(["POST"])
+@permission_classes([IsAuthenticated])
+def approve_pending_document(request, doc_id):
+    """Endpoint for admins to sign/approve pending documents directly from the dashboard."""
+    try:
+        profile = request.user.profile
+        if profile.role != "admin":
+            return Response({"detail": "Only admin can sign pending documents."}, status=403)
+            
+        real_id = int(str(doc_id).replace("PEND-", ""))
+        doc = PendingDocument.objects.get(id=real_id)
+        doc.status = PendingDocument.Status.SIGNED
+        doc.save()
+        
+        # Log the activity
+        AuditLog.objects.create(
+            user=request.user,
+            action=AuditLog.Action.SIGN,
+            status=AuditLog.Status.SUCCESS,
+            data_hash=f"PEND-{real_id}",
+            ip_address=_request_ip(request),
+        )
+        
+        return Response({"status": "success"})
+    except Exception as e:
+        return Response({"detail": str(e)}, status=400)
+@api_view(["GET"])
+@permission_classes([IsAuthenticated])
+def download_pending_document(request, doc_id):
+    """Endpoint to download the contents of a signed pending document."""
+    try:
+        real_id = int(str(doc_id).replace("PEND-", ""))
+        doc = PendingDocument.objects.get(id=real_id)
+        
+        if doc.file_bytes:
+            response = HttpResponse(bytes(doc.file_bytes), content_type="application/octet-stream")
+        else:
+            response = HttpResponse(doc.text_data, content_type="text/plain")
+            
+        response["Content-Disposition"] = f'attachment; filename="signed_{doc.filename}"'
+        return response
+    except Exception as e:
+        return Response({"detail": str(e)}, status=400)
+        
+    

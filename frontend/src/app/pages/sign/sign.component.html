@@ -1,22 +1,29 @@
 <div class="signing-container">
   <app-navbar></app-navbar>
 
-  <!-- Header -->
   <div class="signing-header">
     <h2>
-      <i class="fas fa-pen-fancy"></i>
-      Sign Document
+      <i class="fas fa-file-contract"></i>
+      Process Document
     </h2>
 
     <p>
-      Upload files or enter text and digitally sign them
+      Upload a document to the server for review, or digitally sign it directly if you have admin privileges.
     </p>
   </div>
 
-  <!-- Main Content -->
   <div class="signing-content">
 
-    <!-- Combined Upload + Text Field -->
+    <div *ngIf="currentUserRole === 'admin' && pendingDocId()" class="alert alert-info d-flex justify-content-between align-items-center" style="margin-bottom: 20px; background: #e0f7fa; color: #006064; border: 1px solid #b2ebf2;">
+      <div>
+        <i class="fas fa-info-circle me-2"></i> 
+        You are signing pending document ID: <strong>{{ pendingDocId() }}</strong>. Please upload the corresponding file below.
+      </div>
+      <button class="btn btn-sm btn-outline-info" (click)="clearPendingState()" style="border-color: #006064; color: #006064;">
+        <i class="fas fa-times"></i> Cancel & Sign New
+      </button>
+    </div>
+
     <div
       class="upload-section"
       (dragover)="onDragOver($event)"
@@ -25,74 +32,31 @@
       [class.drag-active]="dragOver()"
     >
 
-      <!-- Upload Box -->
       <div class="upload-box">
-
         <i class="fas fa-cloud-upload-alt"></i>
-
         <h3>Choose a Document</h3>
-
-        <p>
-          Drag & drop a file or browse from device
-        </p>
-
-        <input
-          type="file"
-          #signFileInput
-          (change)="onFileChange($event)"
-          class="file-input"
-        />
-
-        <button
-          type="button"
-          class="btn btn-primary"
-          (click)="signFileInput.click()"
-        >
-          <i class="fas fa-folder-open"></i>
-          Browse Files
+        <p>Drag & drop a file or browse from device</p>
+        <input type="file" #signFileInput (change)="onFileChange($event)" class="file-input" />
+        <button type="button" class="btn btn-primary" (click)="signFileInput.click()">
+          <i class="fas fa-folder-open"></i> Browse Files
         </button>
-
       </div>
 
-      <!-- Selected File -->
       <div *ngIf="selectedFile" class="selected-file">
-
         <i class="fas fa-file-check"></i>
-
         <div class="file-info">
-
-          <p>
-            <strong>{{ selectedFile.name }}</strong>
-          </p>
-
-          <small>
-            Size:
-            {{ (selectedFile.size / 1024).toFixed(2) }} KB
-          </small>
-
+          <p><strong>{{ selectedFile.name }}</strong></p>
+          <small>Size: {{ (selectedFile.size / 1024).toFixed(2) }} KB</small>
         </div>
-
-        <button
-          type="button"
-          class="remove-btn"
-          (click)="clearFile()"
-        >
+        <button type="button" class="remove-btn" (click)="clearFile()">
           <i class="fas fa-times"></i>
         </button>
-
       </div>
 
-      <!-- Merged Text Field -->
       <div class="text-field">
-
         <label class="text-label">
-
-          <i class="fas fa-keyboard"></i>
-
-          Enter Text to Sign
-
+          <i class="fas fa-keyboard"></i> Enter Text instead of file
         </label>
-
         <textarea
           class="text-input"
           [(ngModel)]="textData"
@@ -100,212 +64,96 @@
           rows="8"
           placeholder="Type or paste text, JSON, or notes here..."
         ></textarea>
-
       </div>
 
     </div>
 
-    <!-- Action Buttons -->
-    <div class="action-buttons">
-
+    <div class="action-buttons d-flex gap-3">
+      
       <button
-        class="btn btn-success"
-        (click)="signDocument()"
-        [disabled]="signButtonDisabled()"
+        class="btn btn-info flex-grow-1"
+        (click)="uploadToServer()"
+        [disabled]="actionButtonDisabled()"
+        style="color: white; font-weight: 600;"
       >
-
         <span *ngIf="!loading()">
-
-          <i class="fas fa-signature"></i>
-
-          Sign Document
-
+          <i class="fas fa-upload me-2"></i> Upload Document to Server
         </span>
-
         <span *ngIf="loading()">
-
-          <i class="fas fa-spinner fa-spin"></i>
-
-          Signing...
-
+          <i class="fas fa-spinner fa-spin me-2"></i> Uploading...
         </span>
-
       </button>
 
       <button
-        class="btn btn-secondary"
-        (click)="resetResult()"
+        *ngIf="currentUserRole === 'admin'"
+        class="btn btn-success flex-grow-1"
+        (click)="openAlgorithmModal()"
+        [disabled]="actionButtonDisabled()"
       >
+        <span *ngIf="!loading()">
+          <i class="fas fa-signature me-2"></i> Sign Document
+        </span>
+        <span *ngIf="loading()">
+          <i class="fas fa-spinner fa-spin me-2"></i> Signing...
+        </span>
+      </button>
 
-        <i class="fas fa-times"></i>
-
-        Clear
-
+      <button class="btn btn-secondary" (click)="resetResult()" [disabled]="loading()">
+        <i class="fas fa-times"></i> Clear
       </button>
 
     </div>
 
-    <!-- Error Message -->
-    <div
-      *ngIf="error()"
-      class="alert alert-danger"
-    >
-
-      <i class="fas fa-exclamation-circle"></i>
-
-      {{ error() }}
-
+    <div *ngIf="error()" class="alert alert-danger mt-4">
+      <i class="fas fa-exclamation-circle"></i> {{ error() }}
     </div>
 
-    <!-- Success Result -->
-    <div
-      *ngIf="signSuccess()"
-      class="signature-result"
-    >
-
+    <div *ngIf="actionSuccess()" class="signature-result mt-4">
       <div class="result-header success">
-
         <i class="fas fa-check-circle"></i>
-
-        <h3>
-          Document Signed Successfully!
-        </h3>
-
+        <h3>Success!</h3>
       </div>
-
+      
       <div class="result-details">
-
-        <p>
-          Your signed package has been generated successfully.
-        </p>
-
+        <p>{{ successMessage() }}</p>
       </div>
 
       <button
-        class="btn btn-download"
+        *ngIf="signedPackageUrl()"
+        class="btn btn-download mt-3"
         (click)="downloadSignedDocument()"
       >
-
-        <i class="fas fa-download"></i>
-
-        Download Signed File
-
+        <i class="fas fa-download"></i> Download Signed File
       </button>
-
     </div>
 
   </div>
-
 </div>
 
-<!-- Algorithm Modal -->
-<div
-  class="modal-backdrop"
-  *ngIf="algorithmModalOpen()"
-  (click)="closeAlgorithmModal()"
-></div>
-
-<section
-  class="modal-card"
-  *ngIf="algorithmModalOpen()"
->
-
-  <!-- Modal Header -->
+<div class="modal-backdrop" *ngIf="algorithmModalOpen()" (click)="closeAlgorithmModal()"></div>
+<section class="modal-card" *ngIf="algorithmModalOpen()">
   <div class="modal-header">
-
-    <h2>
-
-      <i class="fas fa-shield-alt"></i>
-
-      Select Signing Algorithm
-
-    </h2>
-
-    <button
-      type="button"
-      class="modal-close"
-      (click)="closeAlgorithmModal()"
-    >
-      ✕
-    </button>
-
+    <h2><i class="fas fa-shield-alt"></i> Select Signing Algorithm</h2>
+    <button type="button" class="modal-close" (click)="closeAlgorithmModal()">✕</button>
   </div>
-
-  <!-- Modal Description -->
-  <p class="modal-desc">
-
-    Choose the cryptographic algorithm
-    used to digitally sign your data.
-
-  </p>
-
-  <!-- Loading -->
+  <p class="modal-desc">Choose the cryptographic algorithm used to digitally sign your data.</p>
+  
   <div *ngIf="algoLoading()" class="algo-loading">
-
-    <i class="fas fa-spinner fa-spin"></i>
-
-    Loading algorithms...
-
+    <i class="fas fa-spinner fa-spin"></i> Loading algorithms...
   </div>
-
-  <!-- Algorithm List -->
-  <div
-    class="algo-list"
-    *ngIf="!algoLoading()"
-  >
-
-    <label
-      class="algo-option"
-      *ngFor="let a of supportedAlgorithms()"
-    >
-
-      <input
-        type="radio"
-        name="algo"
-        [value]="a.id"
-        [ngModel]="selectedAlgorithm()"
-        (ngModelChange)="selectedAlgorithm.set($event)"
-      />
-
-      <span class="algo-name">
-
-        {{ a.label }}
-
-      </span>
-
+  
+  <div class="algo-list" *ngIf="!algoLoading()">
+    <label class="algo-option" *ngFor="let a of supportedAlgorithms()">
+      <input type="radio" name="algo" [value]="a.id" [ngModel]="selectedAlgorithm()" (ngModelChange)="selectedAlgorithm.set($event)"/>
+      <span class="algo-name">{{ a.label }}</span>
     </label>
-
   </div>
-
-  <!-- Modal Actions -->
+  
   <div class="modal-actions">
-
-    <button
-      type="button"
-      class="btn btn-secondary"
-      (click)="closeAlgorithmModal()"
-      [disabled]="loading()"
-    >
-      Cancel
+    <button type="button" class="btn btn-secondary" (click)="closeAlgorithmModal()" [disabled]="loading()">Cancel</button>
+    <button type="button" class="btn btn-primary" (click)="confirmAlgorithmAndSign()" [disabled]="loading()">
+      <span *ngIf="!loading()">Continue & Sign</span>
+      <span *ngIf="loading()">Signing...</span>
     </button>
-
-    <button
-      type="button"
-      class="btn btn-primary"
-      (click)="confirmAlgorithmAndSign()"
-      [disabled]="loading()"
-    >
-
-      <span *ngIf="!loading()">
-        Continue & Sign
-      </span>
-
-      <span *ngIf="loading()">
-        Signing...
-      </span>
-
-    </button>
-
   </div>
-
 </section>

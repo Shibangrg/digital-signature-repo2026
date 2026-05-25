@@ -1,5 +1,4 @@
 from django.urls import path
-
 from . import views
 
 urlpatterns = [
@@ -18,9 +17,13 @@ urlpatterns = [
     path("logs", views.logs, name="logs"),
     path("verify", views.verify, name="verify"),
     path("export", views.export_signed, name="export"),
-    # New signed-package endpoints
     path("sign-document", views.sign_document, name="sign_document"),
     path("verify-document", views.verify_document, name="verify_document"),
     path("verify-stored-document", views.verify_stored_document, name="verify_stored_document"),
     path("verify-and-watermark", views.verify_and_watermark, name="verify_and_watermark"),
+    
+    # NEW ENDPOINTS FOR PENDING DOCUMENTS
+    path("upload-pending-document", views.upload_pending_document, name="upload_pending_document"),
+    path("approve-pending-document/<str:doc_id>", views.approve_pending_document, name="approve_pending_document"),
+    path("download-pending-document/<str:doc_id>", views.download_pending_document, name="download_pending_document"),
 ]
